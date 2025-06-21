@@ -5,7 +5,9 @@ import { StoriesContainer } from '@/components/stories/StoriesContainer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Send, Image as ImageIcon, X } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Send, Image as ImageIcon, X, MessageSquareOff, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,6 +18,7 @@ export function Dashboard() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [feedKey, setFeedKey] = useState(0);
+  const [commentsEnabled, setCommentsEnabled] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const postBoxRef = useRef<HTMLDivElement>(null);
@@ -127,12 +130,14 @@ export function Dashboard() {
         .insert({
           content: postContent.trim(),
           user_id: user.id,
-          image_url: imageUrl
+          image_url: imageUrl,
+          comments_enabled: commentsEnabled
         });
 
       if (error) throw error;
 
       setPostContent('');
+      setCommentsEnabled(true); // Reset to default
       removeImage();
       
       // Force feed refresh by updating key - this will trigger CommunityFeed to re-mount
@@ -140,7 +145,9 @@ export function Dashboard() {
       
       toast({
         title: 'Success',
-        description: 'Your post has been shared!'
+        description: commentsEnabled 
+          ? 'Your post has been shared!' 
+          : 'Your post has been shared with comments disabled!'
       });
     } catch (error) {
       console.error('Error creating post:', error);
@@ -168,9 +175,9 @@ export function Dashboard() {
         <StoriesContainer />
         
         {/* Scrollable Content Area */}
-        <ScrollArea ref={scrollAreaRef} className="h-[calc(100vh-180px)] px-2">
-          {/* Post Box */}
-          <Card ref={postBoxRef} className="mb-4 card-gradient animate-fade-in shadow-lg border-2 border-social-green/10">
+        <ScrollArea ref={scrollAreaRef} className="h-[calc(100vh-180px)] px-2 scroll-smooth">
+          {/* Enhanced Post Box */}
+          <Card ref={postBoxRef} className="mb-4 card-gradient animate-fade-in shadow-lg border-2 border-social-green/10 card-hover">
             <CardContent className="p-4">
               <div className="space-y-4">
                 <Textarea
@@ -193,13 +200,42 @@ export function Dashboard() {
                     <Button
                       variant="destructive"
                       size="icon"
-                      className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-lg hover:scale-105 transition-transform"
+                      className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-lg hover:scale-105 transition-transform btn-hover-lift"
                       onClick={removeImage}
                     >
                       <X className="h-3 w-3" />
                     </Button>
                   </div>
                 )}
+                
+                {/* Comment Settings */}
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-muted">
+                  <div className="flex items-center gap-3">
+                    {commentsEnabled ? (
+                      <MessageSquare className="h-4 w-4 text-social-green" />
+                    ) : (
+                      <MessageSquareOff className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <div>
+                      <Label htmlFor="comments-toggle" className="font-pixelated text-xs font-medium">
+                        Allow Comments
+                      </Label>
+                      <p className="font-pixelated text-xs text-muted-foreground">
+                        {commentsEnabled 
+                          ? 'People can comment on this post' 
+                          : 'Comments are disabled for this post'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="comments-toggle"
+                    checked={commentsEnabled}
+                    onCheckedChange={setCommentsEnabled}
+                    disabled={isPosting}
+                    className="data-[state=checked]:bg-social-green"
+                  />
+                </div>
                 
                 <div className="flex items-center justify-between gap-3 pt-1">
                   <div className="flex items-center gap-3">
@@ -214,7 +250,7 @@ export function Dashboard() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-9 font-pixelated text-xs hover:bg-social-green/5 transition-colors"
+                      className="h-9 font-pixelated text-xs hover:bg-social-green/5 transition-colors btn-hover-lift"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isPosting}
                     >
@@ -229,7 +265,7 @@ export function Dashboard() {
                     onClick={handlePost}
                     disabled={(!postContent.trim() && !selectedImage) || isPosting}
                     size="sm"
-                    className="bg-social-green hover:bg-social-light-green text-white font-pixelated h-9 px-4 hover:scale-105 transition-transform"
+                    className="bg-social-green hover:bg-social-light-green text-white font-pixelated h-9 px-4 hover:scale-105 transition-transform btn-hover-lift"
                   >
                     <Send className="h-4 w-4 mr-2" />
                     {isPosting ? 'Posting...' : 'Share Post'}
