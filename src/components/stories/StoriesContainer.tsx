@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,6 +17,7 @@ interface Story {
   created_at: string;
   expires_at: string;
   views_count: number;
+  viewed_by_current_user: boolean;
   profiles: {
     name: string;
     username: string;
@@ -36,6 +36,7 @@ const StoriesContainer = React.memo(() => {
     showConfirm: boolean;
   }>({ show: false, user: null, showConfirm: false });
   const [loading, setLoading] = useState(true);
+  const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const fetchStories = useCallback(async () => {
@@ -61,12 +62,27 @@ const StoriesContainer = React.memo(() => {
       // Group stories by user and keep only the latest story per user
       const groupedStories = data?.reduce((acc: Record<string, Story>, story: any) => {
         if (!acc[story.user_id] || new Date(story.created_at) > new Date(acc[story.user_id].created_at)) {
-          acc[story.user_id] = story;
+          acc[story.user_id] = {
+            ...story,
+            viewed_by_current_user: viewedStories.has(story.id)
+          };
         }
         return acc;
       }, {});
 
-      setStories(Object.values(groupedStories || {}));
+      const storiesArray = Object.values(groupedStories || {});
+      
+      // Sort stories: unseen stories first, then seen stories
+      const sortedStories = storiesArray.sort((a, b) => {
+        // If one is viewed and other is not, prioritize unviewed
+        if (a.viewed_by_current_user !== b.viewed_by_current_user) {
+          return a.viewed_by_current_user ? 1 : -1;
+        }
+        // If both have same view status, sort by creation time (newest first)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      setStories(sortedStories);
     } catch (error) {
       console.error('Error fetching stories:', error);
       toast({
@@ -77,7 +93,7 @@ const StoriesContainer = React.memo(() => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, viewedStories]);
 
   const getCurrentUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -89,6 +105,13 @@ const StoriesContainer = React.memo(() => {
         .single();
       
       setCurrentUser(profile);
+
+      // Load viewed stories from localStorage
+      const viewedStoriesKey = `viewed_stories_${user.id}`;
+      const savedViewedStories = localStorage.getItem(viewedStoriesKey);
+      if (savedViewedStories) {
+        setViewedStories(new Set(JSON.parse(savedViewedStories)));
+      }
     }
   }, []);
 
@@ -136,8 +159,8 @@ const StoriesContainer = React.memo(() => {
   const handleStoryClick = useCallback(async (story: Story) => {
     setSelectedStory(story);
     
-    // Mark story as viewed using the new function
-    if (story.user_id !== currentUser?.id) {
+    // Mark story as viewed
+    if (story.user_id !== currentUser?.id && !viewedStories.has(story.id)) {
       try {
         const { data, error } = await supabase.rpc('increment_story_views', {
           story_uuid: story.id,
@@ -147,20 +170,49 @@ const StoriesContainer = React.memo(() => {
         if (error) {
           console.error('Error tracking story view:', error);
         } else {
-          // Update local state with new view count
+          // Update local viewed stories
+          const newViewedStories = new Set(viewedStories);
+          newViewedStories.add(story.id);
+          setViewedStories(newViewedStories);
+
+          // Save to localStorage
+          if (currentUser) {
+            const viewedStoriesKey = `viewed_stories_${currentUser.id}`;
+            localStorage.setItem(viewedStoriesKey, JSON.stringify(Array.from(newViewedStories)));
+          }
+
+          // Update local state with new view count and viewed status
           setStories(prevStories => 
             prevStories.map(s => 
               s.id === story.id 
-                ? { ...s, views_count: data || s.views_count + 1 }
+                ? { 
+                    ...s, 
+                    views_count: data || s.views_count + 1,
+                    viewed_by_current_user: true
+                  }
                 : s
             )
           );
+
+          // Re-sort stories after marking as viewed
+          setTimeout(() => {
+            setStories(prevStories => {
+              return [...prevStories].sort((a, b) => {
+                // If one is viewed and other is not, prioritize unviewed
+                if (a.viewed_by_current_user !== b.viewed_by_current_user) {
+                  return a.viewed_by_current_user ? 1 : -1;
+                }
+                // If both have same view status, sort by creation time (newest first)
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+              });
+            });
+          }, 100);
         }
       } catch (error) {
         console.error('Error tracking story view:', error);
       }
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, viewedStories, currentUser]);
 
   const userStory = useMemo(() => {
     return stories.find(story => story.user_id === currentUser?.id);
@@ -193,7 +245,7 @@ const StoriesContainer = React.memo(() => {
 
   return (
     <>
-      <div className="flex gap-2 p-3 overflow-x-auto bg-background border-b">
+      <div className="flex gap-2 p-3 overflow-x-auto bg-background border-b scroll-smooth">
         {/* Add Story Button */}
         <div className="flex flex-col items-center gap-1 min-w-[60px]">
           <div className="relative">
@@ -248,29 +300,55 @@ const StoriesContainer = React.memo(() => {
         )}
 
         {/* Other Stories */}
-        {otherStories.map((story) => (
-          <div
-            key={story.id}
-            className="flex flex-col items-center gap-1 min-w-[60px] cursor-pointer group"
-            onClick={() => handleStoryClick(story)}
-          >
-            <div className="relative">
-              <Avatar className="w-12 h-12 border-2 border-social-green hover:border-social-light-green transition-all duration-200 group-hover:scale-105">
-                {story.profiles.avatar ? (
-                  <AvatarImage src={story.profiles.avatar} alt={story.profiles.name} />
-                ) : (
-                  <AvatarFallback className="bg-social-dark-green text-white font-pixelated text-xs">
-                    {story.profiles.name.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
+        {otherStories.map((story) => {
+          const isViewed = viewedStories.has(story.id);
+          
+          return (
+            <div
+              key={story.id}
+              className="flex flex-col items-center gap-1 min-w-[60px] cursor-pointer group"
+              onClick={() => handleStoryClick(story)}
+            >
+              <div className="relative">
+                <Avatar className={`w-12 h-12 border-2 transition-all duration-200 group-hover:scale-105 ${
+                  isViewed 
+                    ? 'border-gray-300 hover:border-gray-400' 
+                    : 'border-social-green hover:border-social-light-green'
+                }`}>
+                  {story.profiles.avatar ? (
+                    <AvatarImage src={story.profiles.avatar} alt={story.profiles.name} />
+                  ) : (
+                    <AvatarFallback className="bg-social-dark-green text-white font-pixelated text-xs">
+                      {story.profiles.name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                
+                {/* Green dot for unseen stories */}
+                {!isViewed && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-social-green rounded-full border-2 border-white animate-pulse">
+                    <div className="w-full h-full bg-social-green rounded-full animate-ping opacity-75"></div>
+                  </div>
                 )}
-              </Avatar>
-              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-social-green to-social-blue opacity-20" />
+                
+                {/* Gradient overlay for viewed stories */}
+                {isViewed && (
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-gray-400 to-gray-500 opacity-20" />
+                )}
+                
+                {/* Gradient overlay for unviewed stories */}
+                {!isViewed && (
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-social-green to-social-blue opacity-20" />
+                )}
+              </div>
+              <span className={`text-xs font-pixelated text-center truncate max-w-[60px] ${
+                isViewed ? 'text-muted-foreground' : 'text-foreground'
+              }`}>
+                {story.profiles.name.split(' ')[0]}
+              </span>
             </div>
-            <span className="text-xs font-pixelated text-center truncate max-w-[60px]">
-              {story.profiles.name.split(' ')[0]}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Story Viewer */}

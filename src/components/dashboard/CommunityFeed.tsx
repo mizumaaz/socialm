@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +32,7 @@ interface Post {
   content: string;
   image_url: string | null;
   created_at: string;
+  updated_at: string;
   user_id: string;
   profiles: {
     name: string;
@@ -76,6 +77,7 @@ export function CommunityFeed() {
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [deletePostId, setDeletePostId] = useState<string | null>(null);
+  const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [likingPosts, setLikingPosts] = useState<{ [key: string]: boolean }>({});
   const [expandedComments, setExpandedComments] = useState<{ [key: string]: boolean }>({});
@@ -134,7 +136,7 @@ export function CommunityFeed() {
     }
   };
 
-  // Silent background fetch without loading states
+  // Optimized background fetch with reduced database load
   const fetchPostsInBackground = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -144,93 +146,70 @@ export function CommunityFeed() {
           content,
           image_url,
           created_at,
+          updated_at,
           user_id,
           profiles:user_id (
             name,
             username,
             avatar
-          ),
-          likes (
-            id,
-            user_id
-          ),
-          comments (
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20); // Limit to reduce load
+
+      if (error) throw error;
+
+      // Fetch likes and comments separately for better performance
+      const postIds = data?.map(post => post.id) || [];
+      
+      const [likesData, commentsData] = await Promise.all([
+        supabase
+          .from('likes')
+          .select('id, user_id, post_id')
+          .in('post_id', postIds),
+        supabase
+          .from('comments')
+          .select(`
             id,
             content,
             created_at,
             user_id,
+            post_id,
             profiles:user_id (
               name,
               avatar
             )
-          )
-        `)
-        .order('created_at', { ascending: false });
+          `)
+          .in('post_id', postIds)
+          .order('created_at', { ascending: true })
+      ]);
 
-      if (error) throw error;
+      const formattedPosts = data?.map(post => {
+        const postLikes = likesData.data?.filter(like => like.post_id === post.id) || [];
+        const postComments = commentsData.data?.filter(comment => comment.post_id === post.id) || [];
 
-      const formattedPosts = data?.map(post => ({
-        ...post,
-        _count: {
-          likes: post.likes?.length || 0,
-          comments: post.comments?.length || 0
-        }
-      })) || [];
+        return {
+          ...post,
+          likes: postLikes,
+          comments: postComments,
+          _count: {
+            likes: postLikes.length,
+            comments: postComments.length
+          }
+        };
+      }) || [];
 
-      // Smoothly update posts without any loading indicators
       setPosts(formattedPosts);
     } catch (error) {
       console.error('Background fetch error:', error);
-      // Don't show error toast for background updates to avoid interrupting user
     }
   }, []);
 
-  // Initial fetch with loading state (only on first load)
+  // Initial fetch with loading state
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          id,
-          content,
-          image_url,
-          created_at,
-          user_id,
-          profiles:user_id (
-            name,
-            username,
-            avatar
-          ),
-          likes (
-            id,
-            user_id
-          ),
-          comments (
-            id,
-            content,
-            created_at,
-            user_id,
-            profiles:user_id (
-              name,
-              avatar
-            )
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const formattedPosts = data?.map(post => ({
-        ...post,
-        _count: {
-          likes: post.likes?.length || 0,
-          comments: post.comments?.length || 0
-        }
-      })) || [];
-
-      setPosts(formattedPosts);
+      await fetchPostsInBackground();
     } catch (error) {
       console.error('Error fetching posts:', error);
       toast({
@@ -241,7 +220,7 @@ export function CommunityFeed() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [fetchPostsInBackground, toast]);
 
   const getCurrentUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -391,7 +370,10 @@ export function CommunityFeed() {
     try {
       const { error } = await supabase
         .from('posts')
-        .update({ content: editContent.trim() })
+        .update({ 
+          content: editContent.trim(),
+          updated_at: new Date().toISOString()
+        })
         .eq('id', postId);
 
       if (error) throw error;
@@ -399,7 +381,7 @@ export function CommunityFeed() {
       setPosts(prevPosts =>
         prevPosts.map(post =>
           post.id === postId
-            ? { ...post, content: editContent.trim() }
+            ? { ...post, content: editContent.trim(), updated_at: new Date().toISOString() }
             : post
         )
       );
@@ -447,6 +429,48 @@ export function CommunityFeed() {
     }
   };
 
+  const handleDeleteComment = async (commentId: string, postId: string) => {
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+
+      // Update posts to remove the deleted comment
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post.id === postId
+            ? {
+                ...post,
+                comments: post.comments.filter(comment => comment.id !== commentId),
+                _count: {
+                  ...post._count,
+                  likes: post._count?.likes || 0,
+                  comments: Math.max(0, (post._count?.comments || 0) - 1)
+                }
+              }
+            : post
+        )
+      );
+
+      setDeleteCommentId(null);
+
+      toast({
+        title: 'Comment deleted',
+        description: 'The comment has been deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to delete comment'
+      });
+    }
+  };
+
   const scrollToTop = () => {
     if (feedRef.current) {
       feedRef.current.scrollTo({ top: 0, behavior: 'smooth' });
@@ -464,7 +488,7 @@ export function CommunityFeed() {
     getCurrentUser();
     fetchPosts();
 
-    // Set up real-time subscriptions for seamless background updates
+    // Set up real-time subscriptions with optimized queries
     const postsChannel = supabase
       .channel('posts-realtime')
       .on('postgres_changes', 
@@ -541,7 +565,7 @@ export function CommunityFeed() {
   }
 
   return (
-    <div ref={feedRef} className="space-y-4 relative scroll-container">
+    <div ref={feedRef} className="space-y-4 relative scroll-container scroll-smooth">
       {/* Scroll to Top Button - Only show on home page */}
       {isHomePage && showScrollTop && (
         <Button
@@ -574,6 +598,7 @@ export function CommunityFeed() {
           const hasComments = post.comments && post.comments.length > 0;
           const commentsExpanded = expandedComments[post.id];
           const commentBoxVisible = showCommentBox[post.id];
+          const isEdited = post.updated_at !== post.created_at;
 
           return (
             <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200">
@@ -599,12 +624,19 @@ export function CommunityFeed() {
                       >
                         {post.profiles?.name}
                       </p>
-                      <p 
-                        className="font-pixelated text-xs text-muted-foreground cursor-pointer hover:text-social-green transition-colors"
-                        onClick={() => handleUserClick(post.user_id, post.profiles?.username)}
-                      >
-                        @{post.profiles?.username} • {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p 
+                          className="font-pixelated text-xs text-muted-foreground cursor-pointer hover:text-social-green transition-colors"
+                          onClick={() => handleUserClick(post.user_id, post.profiles?.username)}
+                        >
+                          @{post.profiles?.username} • {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+                        </p>
+                        {isEdited && (
+                          <span className="font-pixelated text-xs text-muted-foreground">
+                            (edited)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
@@ -646,6 +678,7 @@ export function CommunityFeed() {
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
                       className="font-pixelated text-xs"
+                      placeholder="Edit your post..."
                     />
                     <div className="flex gap-2">
                       <Button
@@ -653,6 +686,7 @@ export function CommunityFeed() {
                         size="sm"
                         className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs"
                       >
+                        <Save className="h-3 w-3 mr-1" />
                         Save
                       </Button>
                       <Button
@@ -664,6 +698,7 @@ export function CommunityFeed() {
                         variant="outline"
                         className="font-pixelated text-xs"
                       >
+                        <X className="h-3 w-3 mr-1" />
                         Cancel
                       </Button>
                     </div>
@@ -743,16 +778,29 @@ export function CommunityFeed() {
                               )}
                             </Avatar>
                             <div className="flex-1 bg-muted/50 rounded-lg p-2">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span 
-                                  className="font-pixelated text-xs font-medium cursor-pointer hover:text-social-green transition-colors"
-                                  onClick={() => handleUserClick(comment.user_id, '')}
-                                >
-                                  {comment.profiles?.name}
-                                </span>
-                                <span className="font-pixelated text-xs text-muted-foreground">
-                                  {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
-                                </span>
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                  <span 
+                                    className="font-pixelated text-xs font-medium cursor-pointer hover:text-social-green transition-colors"
+                                    onClick={() => handleUserClick(comment.user_id, '')}
+                                  >
+                                    {comment.profiles?.name}
+                                  </span>
+                                  <span className="font-pixelated text-xs text-muted-foreground">
+                                    {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                                  </span>
+                                </div>
+                                {/* Only show delete button for comment owner */}
+                                {comment.user_id === currentUser?.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteCommentId(comment.id)}
+                                    className="h-5 w-5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                )}
                               </div>
                               <p className="font-pixelated text-xs leading-relaxed">
                                 {comment.content}
@@ -814,7 +862,7 @@ export function CommunityFeed() {
         user={selectedUser}
       />
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Post Confirmation Dialog */}
       <AlertDialog open={!!deletePostId} onOpenChange={() => setDeletePostId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -827,6 +875,34 @@ export function CommunityFeed() {
             <AlertDialogCancel className="font-pixelated text-xs">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deletePostId && handleDeletePost(deletePostId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-pixelated text-xs"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Comment Confirmation Dialog */}
+      <AlertDialog open={!!deleteCommentId} onOpenChange={() => setDeleteCommentId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-pixelated">Delete Comment</AlertDialogTitle>
+            <AlertDialogDescription className="font-pixelated text-xs">
+              Are you sure you want to delete this comment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="font-pixelated text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteCommentId) {
+                  const post = posts.find(p => p.comments.some(c => c.id === deleteCommentId));
+                  if (post) {
+                    handleDeleteComment(deleteCommentId, post.id);
+                  }
+                }
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-pixelated text-xs"
             >
               Delete
