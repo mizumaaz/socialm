@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X, MessageSquareOff } from 'lucide-react';
+import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -26,8 +26,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useLocation } from 'react-router-dom';
-import { useOptimizedQueries } from '@/hooks/use-optimized-queries';
-import { formatTimeAgoMemoized } from '@/utils/localization';
 
 interface Post {
   id: string;
@@ -36,7 +34,6 @@ interface Post {
   created_at: string;
   updated_at: string;
   user_id: string;
-  comments_enabled: boolean;
   profiles: {
     name: string;
     username: string;
@@ -90,7 +87,6 @@ export function CommunityFeed() {
   const feedRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const { toast } = useToast();
-  const { fetchOptimizedFeed, toggleLikeOptimized } = useOptimizedQueries();
 
   const isHomePage = location.pathname === '/dashboard';
 
@@ -101,16 +97,7 @@ export function CommunityFeed() {
     }));
   };
 
-  const toggleCommentBox = (postId: string, commentsEnabled: boolean) => {
-    if (!commentsEnabled) {
-      toast({
-        title: 'Comments disabled',
-        description: 'Comments are disabled for this post',
-        duration: 3000
-      });
-      return;
-    }
-
+  const toggleCommentBox = (postId: string) => {
     setShowCommentBox(prev => ({
       ...prev,
       [postId]: !prev[postId]
@@ -161,7 +148,6 @@ export function CommunityFeed() {
           created_at,
           updated_at,
           user_id,
-          comments_enabled,
           profiles:user_id (
             name,
             username,
@@ -320,16 +306,6 @@ export function CommunityFeed() {
   const handleComment = async (postId: string) => {
     const content = commentInputs[postId]?.trim();
     if (!content || !currentUser || submittingComments[postId]) return;
-
-    const post = posts.find(p => p.id === postId);
-    if (!post?.comments_enabled) {
-      toast({
-        variant: 'destructive',
-        title: 'Comments disabled',
-        description: 'Comments are disabled for this post'
-      });
-      return;
-    }
 
     try {
       setSubmittingComments(prev => ({ ...prev, [postId]: true }));
@@ -595,7 +571,7 @@ export function CommunityFeed() {
         <Button
           onClick={scrollToTop}
           size="icon"
-          className="fixed bottom-20 right-4 z-50 h-10 w-10 rounded-full bg-social-green hover:bg-social-light-green text-white shadow-lg hover:scale-110 transition-all duration-200 pixel-border pixel-shadow btn-hover-lift"
+          className="fixed bottom-20 right-4 z-50 h-10 w-10 rounded-full bg-social-green hover:bg-social-light-green text-white shadow-lg hover:scale-110 transition-all duration-200 pixel-border pixel-shadow"
           style={{ 
             fontSize: '8px',
             fontFamily: 'Press Start 2P, cursive'
@@ -625,7 +601,7 @@ export function CommunityFeed() {
           const isEdited = post.updated_at !== post.created_at;
 
           return (
-            <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200 card-hover">
+            <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -653,20 +629,12 @@ export function CommunityFeed() {
                           className="font-pixelated text-xs text-muted-foreground cursor-pointer hover:text-social-green transition-colors"
                           onClick={() => handleUserClick(post.user_id, post.profiles?.username)}
                         >
-                          @{post.profiles?.username} • {formatTimeAgoMemoized(post.created_at)}
+                          @{post.profiles?.username} • {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
                         </p>
                         {isEdited && (
                           <span className="font-pixelated text-xs text-muted-foreground">
                             (edited)
                           </span>
-                        )}
-                        {!post.comments_enabled && (
-                          <div className="flex items-center gap-1">
-                            <MessageSquareOff className="h-3 w-3 text-muted-foreground" />
-                            <span className="font-pixelated text-xs text-muted-foreground">
-                              Comments disabled
-                            </span>
-                          </div>
                         )}
                       </div>
                     </div>
@@ -716,7 +684,7 @@ export function CommunityFeed() {
                       <Button
                         onClick={() => handleEditPost(post.id)}
                         size="sm"
-                        className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs btn-hover-lift"
+                        className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs"
                       >
                         <Save className="h-3 w-3 mr-1" />
                         Save
@@ -758,7 +726,7 @@ export function CommunityFeed() {
                         size="sm"
                         onClick={() => handleLike(post.id)}
                         disabled={likingPosts[post.id]}
-                        className={`font-pixelated text-xs hover:bg-social-magenta/10 transition-all duration-200 hover-scale btn-hover-lift ${
+                        className={`font-pixelated text-xs hover:bg-social-magenta/10 transition-all duration-200 hover-scale ${
                           isLiked ? 'text-social-magenta' : 'text-muted-foreground'
                         }`}
                       >
@@ -769,19 +737,10 @@ export function CommunityFeed() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggleCommentBox(post.id, post.comments_enabled)}
-                        disabled={!post.comments_enabled}
-                        className={`font-pixelated text-xs transition-all duration-200 hover-scale btn-hover-lift ${
-                          post.comments_enabled 
-                            ? 'text-muted-foreground hover:bg-social-blue/10' 
-                            : 'text-muted-foreground/50 cursor-not-allowed'
-                        }`}
+                        onClick={() => toggleCommentBox(post.id)}
+                        className="font-pixelated text-xs text-muted-foreground hover:bg-social-blue/10 transition-all duration-200 hover-scale"
                       >
-                        {post.comments_enabled ? (
-                          <MessageCircle className="h-4 w-4 mr-1" />
-                        ) : (
-                          <MessageSquareOff className="h-4 w-4 mr-1" />
-                        )}
+                        <MessageCircle className="h-4 w-4 mr-1" />
                         {post._count?.comments || 0}
                       </Button>
 
@@ -790,7 +749,7 @@ export function CommunityFeed() {
                           variant="ghost"
                           size="sm"
                           onClick={() => toggleComments(post.id)}
-                          className="font-pixelated text-xs text-muted-foreground hover:bg-social-purple/10 transition-all duration-200 hover-scale btn-hover-lift"
+                          className="font-pixelated text-xs text-muted-foreground hover:bg-social-purple/10 transition-all duration-200 hover-scale"
                         >
                           {commentsExpanded ? 
                             <ChevronUp className="h-4 w-4 mr-1" /> : 
@@ -828,7 +787,7 @@ export function CommunityFeed() {
                                     {comment.profiles?.name}
                                   </span>
                                   <span className="font-pixelated text-xs text-muted-foreground">
-                                    {formatTimeAgoMemoized(comment.created_at)}
+                                    {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                                   </span>
                                 </div>
                                 {/* Only show delete button for comment owner */}
@@ -837,7 +796,7 @@ export function CommunityFeed() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setDeleteCommentId(comment.id)}
-                                    className="h-5 w-5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive btn-hover-lift"
+                                    className="h-5 w-5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                                   >
                                     <Trash2 className="h-3 w-3" />
                                   </Button>
@@ -853,7 +812,7 @@ export function CommunityFeed() {
                     )}
                     
                     {/* Add Comment - Hidden by default, show when comment button is clicked */}
-                    {commentBoxVisible && post.comments_enabled && (
+                    {commentBoxVisible && (
                       <div className="mt-4 flex gap-2 animate-fade-in">
                         <Textarea
                           placeholder="Write a comment..."
@@ -872,22 +831,10 @@ export function CommunityFeed() {
                           onClick={() => handleComment(post.id)}
                           disabled={!commentInputs[post.id]?.trim() || submittingComments[post.id]}
                           size="sm"
-                          className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs self-end hover:scale-105 transition-transform btn-hover-lift"
+                          className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs self-end hover:scale-105 transition-transform"
                         >
                           <Send className="h-3 w-3" />
                         </Button>
-                      </div>
-                    )}
-
-                    {/* Comments disabled message */}
-                    {commentBoxVisible && !post.comments_enabled && (
-                      <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-muted animate-fade-in">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MessageSquareOff className="h-4 w-4" />
-                          <p className="font-pixelated text-xs">
-                            Comments are disabled for this post
-                          </p>
-                        </div>
                       </div>
                     )}
                   </>
