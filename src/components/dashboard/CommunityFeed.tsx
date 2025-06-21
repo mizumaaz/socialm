@@ -34,7 +34,7 @@ interface Post {
   created_at: string;
   updated_at: string;
   user_id: string;
-  comments_enabled: boolean;
+  comments_enabled?: boolean; // Make optional for backward compatibility
   profiles: {
     name: string;
     username: string;
@@ -101,8 +101,8 @@ export function CommunityFeed() {
   const toggleCommentBox = (postId: string) => {
     const post = posts.find(p => p.id === postId);
     
-    // Check if comments are disabled for this post
-    if (post && !post.comments_enabled) {
+    // Check if comments are disabled for this post (default to enabled if undefined)
+    if (post && post.comments_enabled === false) {
       toast({
         variant: 'destructive',
         title: 'Comments disabled',
@@ -149,7 +149,7 @@ export function CommunityFeed() {
     }
   };
 
-  // Optimized background fetch with reduced database load
+  // Optimized background fetch with backward compatibility
   const fetchPostsInBackground = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -169,13 +169,57 @@ export function CommunityFeed() {
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(20); // Limit to reduce load
+        .limit(20);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching posts:', error);
+        // If comments_enabled column doesn't exist, try without it
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            content,
+            image_url,
+            created_at,
+            updated_at,
+            user_id,
+            profiles:user_id (
+              name,
+              username,
+              avatar
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .limit(20);
 
-      // Fetch likes and comments separately for better performance
-      const postIds = data?.map(post => post.id) || [];
+        if (fallbackError) throw fallbackError;
+        
+        // Add default comments_enabled = true for backward compatibility
+        const postsWithCommentsEnabled = fallbackData?.map(post => ({
+          ...post,
+          comments_enabled: true
+        })) || [];
+
+        await fetchLikesAndComments(postsWithCommentsEnabled);
+        return;
+      }
+
+      await fetchLikesAndComments(data || []);
+    } catch (error) {
+      console.error('Background fetch error:', error);
+    }
+  }, []);
+
+  // Separate function to fetch likes and comments
+  const fetchLikesAndComments = async (postsData: any[]) => {
+    try {
+      const postIds = postsData.map(post => post.id);
       
+      if (postIds.length === 0) {
+        setPosts([]);
+        return;
+      }
+
       const [likesData, commentsData] = await Promise.all([
         supabase
           .from('likes')
@@ -198,12 +242,13 @@ export function CommunityFeed() {
           .order('created_at', { ascending: true })
       ]);
 
-      const formattedPosts = data?.map(post => {
+      const formattedPosts = postsData.map(post => {
         const postLikes = likesData.data?.filter(like => like.post_id === post.id) || [];
         const postComments = commentsData.data?.filter(comment => comment.post_id === post.id) || [];
 
         return {
           ...post,
+          comments_enabled: post.comments_enabled !== false, // Default to true if undefined
           likes: postLikes,
           comments: postComments,
           _count: {
@@ -211,13 +256,21 @@ export function CommunityFeed() {
             comments: postComments.length
           }
         };
-      }) || [];
+      });
 
       setPosts(formattedPosts);
     } catch (error) {
-      console.error('Background fetch error:', error);
+      console.error('Error fetching likes and comments:', error);
+      // Set posts without likes/comments if there's an error
+      setPosts(postsData.map(post => ({
+        ...post,
+        comments_enabled: post.comments_enabled !== false,
+        likes: [],
+        comments: [],
+        _count: { likes: 0, comments: 0 }
+      })));
     }
-  }, []);
+  };
 
   // Initial fetch with loading state
   const fetchPosts = useCallback(async () => {
@@ -322,7 +375,7 @@ export function CommunityFeed() {
     if (!content || !currentUser || submittingComments[postId]) return;
 
     const post = posts.find(p => p.id === postId);
-    if (post && !post.comments_enabled) {
+    if (post && post.comments_enabled === false) {
       toast({
         variant: 'destructive',
         title: 'Comments disabled',
@@ -623,6 +676,7 @@ export function CommunityFeed() {
           const commentsExpanded = expandedComments[post.id];
           const commentBoxVisible = showCommentBox[post.id];
           const isEdited = post.updated_at !== post.created_at;
+          const commentsEnabled = post.comments_enabled !== false; // Default to true
 
           return (
             <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200 card-hover">
@@ -660,7 +714,7 @@ export function CommunityFeed() {
                             (edited)
                           </span>
                         )}
-                        {!post.comments_enabled && (
+                        {!commentsEnabled && (
                           <div className="flex items-center gap-1">
                             <MessageSquareOff className="h-3 w-3 text-orange-500" />
                             <span className="font-pixelated text-xs text-orange-600">
@@ -770,9 +824,9 @@ export function CommunityFeed() {
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleCommentBox(post.id)}
-                        disabled={!post.comments_enabled}
+                        disabled={!commentsEnabled}
                         className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
-                          !post.comments_enabled 
+                          !commentsEnabled 
                             ? 'text-muted-foreground/50 cursor-not-allowed hover:bg-transparent' 
                             : 'text-muted-foreground hover:bg-social-blue/10'
                         }`}
@@ -849,7 +903,7 @@ export function CommunityFeed() {
                     )}
                     
                     {/* Add Comment - Hidden by default, show when comment button is clicked */}
-                    {commentBoxVisible && post.comments_enabled && (
+                    {commentBoxVisible && commentsEnabled && (
                       <div className="mt-4 flex gap-2 animate-fade-in">
                         <Textarea
                           placeholder="Write a comment..."
@@ -876,7 +930,7 @@ export function CommunityFeed() {
                     )}
 
                     {/* Comments disabled message */}
-                    {commentBoxVisible && !post.comments_enabled && (
+                    {commentBoxVisible && !commentsEnabled && (
                       <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg animate-fade-in">
                         <div className="flex items-center gap-2">
                           <MessageSquareOff className="h-4 w-4 text-orange-500" />

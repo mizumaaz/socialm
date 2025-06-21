@@ -125,16 +125,38 @@ export function Dashboard() {
         imageUrl = data.publicUrl;
       }
 
-      const { error } = await supabase
-        .from('posts')
-        .insert({
-          content: postContent.trim(),
-          user_id: user.id,
-          image_url: imageUrl,
-          comments_enabled: commentsEnabled
-        });
+      // Create post data with backward compatibility
+      const postData: any = {
+        content: postContent.trim(),
+        user_id: user.id,
+        image_url: imageUrl
+      };
 
-      if (error) throw error;
+      // Only add comments_enabled if the column exists
+      try {
+        // Try to insert with comments_enabled first
+        const { error } = await supabase
+          .from('posts')
+          .insert({
+            ...postData,
+            comments_enabled: commentsEnabled
+          });
+
+        if (error) {
+          // If it fails due to column not existing, try without it
+          if (error.message?.includes('comments_enabled')) {
+            const { error: fallbackError } = await supabase
+              .from('posts')
+              .insert(postData);
+            
+            if (fallbackError) throw fallbackError;
+          } else {
+            throw error;
+          }
+        }
+      } catch (error) {
+        throw error;
+      }
 
       setPostContent('');
       setCommentsEnabled(true); // Reset to default
