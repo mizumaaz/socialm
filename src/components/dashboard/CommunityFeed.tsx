@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X } from 'lucide-react';
+import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X, MessageSquareOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,7 @@ interface Post {
   created_at: string;
   updated_at: string;
   user_id: string;
+  comments_enabled: boolean;
   profiles: {
     name: string;
     username: string;
@@ -98,6 +99,18 @@ export function CommunityFeed() {
   };
 
   const toggleCommentBox = (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    
+    // Check if comments are disabled for this post
+    if (post && !post.comments_enabled) {
+      toast({
+        variant: 'destructive',
+        title: 'Comments disabled',
+        description: 'Comments are disabled for this post'
+      });
+      return;
+    }
+
     setShowCommentBox(prev => ({
       ...prev,
       [postId]: !prev[postId]
@@ -148,6 +161,7 @@ export function CommunityFeed() {
           created_at,
           updated_at,
           user_id,
+          comments_enabled,
           profiles:user_id (
             name,
             username,
@@ -306,6 +320,16 @@ export function CommunityFeed() {
   const handleComment = async (postId: string) => {
     const content = commentInputs[postId]?.trim();
     if (!content || !currentUser || submittingComments[postId]) return;
+
+    const post = posts.find(p => p.id === postId);
+    if (post && !post.comments_enabled) {
+      toast({
+        variant: 'destructive',
+        title: 'Comments disabled',
+        description: 'Comments are disabled for this post'
+      });
+      return;
+    }
 
     try {
       setSubmittingComments(prev => ({ ...prev, [postId]: true }));
@@ -571,7 +595,7 @@ export function CommunityFeed() {
         <Button
           onClick={scrollToTop}
           size="icon"
-          className="fixed bottom-20 right-4 z-50 h-10 w-10 rounded-full bg-social-green hover:bg-social-light-green text-white shadow-lg hover:scale-110 transition-all duration-200 pixel-border pixel-shadow"
+          className="fixed bottom-20 right-4 z-50 h-10 w-10 rounded-full bg-social-green hover:bg-social-light-green text-white shadow-lg btn-hover-lift transition-all duration-200 pixel-border pixel-shadow"
           style={{ 
             fontSize: '8px',
             fontFamily: 'Press Start 2P, cursive'
@@ -601,7 +625,7 @@ export function CommunityFeed() {
           const isEdited = post.updated_at !== post.created_at;
 
           return (
-            <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200">
+            <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200 card-hover">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -635,6 +659,14 @@ export function CommunityFeed() {
                           <span className="font-pixelated text-xs text-muted-foreground">
                             (edited)
                           </span>
+                        )}
+                        {!post.comments_enabled && (
+                          <div className="flex items-center gap-1">
+                            <MessageSquareOff className="h-3 w-3 text-orange-500" />
+                            <span className="font-pixelated text-xs text-orange-600">
+                              Comments disabled
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -726,7 +758,7 @@ export function CommunityFeed() {
                         size="sm"
                         onClick={() => handleLike(post.id)}
                         disabled={likingPosts[post.id]}
-                        className={`font-pixelated text-xs hover:bg-social-magenta/10 transition-all duration-200 hover-scale ${
+                        className={`font-pixelated text-xs hover:bg-social-magenta/10 transition-all duration-200 btn-hover-lift ${
                           isLiked ? 'text-social-magenta' : 'text-muted-foreground'
                         }`}
                       >
@@ -738,7 +770,12 @@ export function CommunityFeed() {
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleCommentBox(post.id)}
-                        className="font-pixelated text-xs text-muted-foreground hover:bg-social-blue/10 transition-all duration-200 hover-scale"
+                        disabled={!post.comments_enabled}
+                        className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
+                          !post.comments_enabled 
+                            ? 'text-muted-foreground/50 cursor-not-allowed hover:bg-transparent' 
+                            : 'text-muted-foreground hover:bg-social-blue/10'
+                        }`}
                       >
                         <MessageCircle className="h-4 w-4 mr-1" />
                         {post._count?.comments || 0}
@@ -749,7 +786,7 @@ export function CommunityFeed() {
                           variant="ghost"
                           size="sm"
                           onClick={() => toggleComments(post.id)}
-                          className="font-pixelated text-xs text-muted-foreground hover:bg-social-purple/10 transition-all duration-200 hover-scale"
+                          className="font-pixelated text-xs text-muted-foreground hover:bg-social-purple/10 transition-all duration-200 btn-hover-lift"
                         >
                           {commentsExpanded ? 
                             <ChevronUp className="h-4 w-4 mr-1" /> : 
@@ -812,7 +849,7 @@ export function CommunityFeed() {
                     )}
                     
                     {/* Add Comment - Hidden by default, show when comment button is clicked */}
-                    {commentBoxVisible && (
+                    {commentBoxVisible && post.comments_enabled && (
                       <div className="mt-4 flex gap-2 animate-fade-in">
                         <Textarea
                           placeholder="Write a comment..."
@@ -831,10 +868,22 @@ export function CommunityFeed() {
                           onClick={() => handleComment(post.id)}
                           disabled={!commentInputs[post.id]?.trim() || submittingComments[post.id]}
                           size="sm"
-                          className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs self-end hover:scale-105 transition-transform"
+                          className="bg-social-green hover:bg-social-light-green text-white font-pixelated text-xs self-end btn-hover-lift transition-transform"
                         >
                           <Send className="h-3 w-3" />
                         </Button>
+                      </div>
+                    )}
+
+                    {/* Comments disabled message */}
+                    {commentBoxVisible && !post.comments_enabled && (
+                      <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg animate-fade-in">
+                        <div className="flex items-center gap-2">
+                          <MessageSquareOff className="h-4 w-4 text-orange-500" />
+                          <p className="font-pixelated text-xs text-orange-700">
+                            Comments are disabled for this post
+                          </p>
+                        </div>
                       </div>
                     )}
                   </>
