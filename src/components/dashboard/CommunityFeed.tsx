@@ -106,7 +106,8 @@ export function CommunityFeed() {
       toast({
         variant: 'destructive',
         title: 'Comments disabled',
-        description: 'Comments are disabled for this post'
+        description: 'Comments are not allowed on this post',
+        duration: 4000,
       });
       return;
     }
@@ -379,7 +380,8 @@ export function CommunityFeed() {
       toast({
         variant: 'destructive',
         title: 'Comments disabled',
-        description: 'Comments are disabled for this post'
+        description: 'Comments are not allowed on this post',
+        duration: 4000,
       });
       return;
     }
@@ -824,7 +826,6 @@ export function CommunityFeed() {
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleCommentBox(post.id)}
-                        disabled={!commentsEnabled}
                         className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
                           !commentsEnabled 
                             ? 'text-muted-foreground/50 cursor-not-allowed hover:bg-transparent' 
@@ -929,14 +930,19 @@ export function CommunityFeed() {
                       </div>
                     )}
 
-                    {/* Comments disabled message */}
+                    {/* Comments disabled message with enhanced styling */}
                     {commentBoxVisible && !commentsEnabled && (
-                      <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg animate-fade-in">
-                        <div className="flex items-center gap-2">
-                          <MessageSquareOff className="h-4 w-4 text-orange-500" />
-                          <p className="font-pixelated text-xs text-orange-700">
-                            Comments are disabled for this post
-                          </p>
+                      <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-l-4 border-orange-400 rounded-lg animate-fade-in shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <MessageSquareOff className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                          <div>
+                            <p className="font-pixelated text-sm font-medium text-orange-800">
+                              Comments are disabled
+                            </p>
+                            <p className="font-pixelated text-xs text-orange-700 mt-1">
+                              The author has disabled comments for this post
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}

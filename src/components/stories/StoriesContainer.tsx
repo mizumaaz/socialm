@@ -39,6 +39,85 @@ const StoriesContainer = React.memo(() => {
   const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
+  // Enhanced story view tracking with cross-device sync
+  const markStoryAsViewed = useCallback(async (storyId: string, userId: string) => {
+    try {
+      // Update local state immediately
+      const newViewedStories = new Set(viewedStories);
+      newViewedStories.add(storyId);
+      setViewedStories(newViewedStories);
+
+      // Save to localStorage with user-specific key
+      const viewedStoriesKey = `viewed_stories_${userId}`;
+      localStorage.setItem(viewedStoriesKey, JSON.stringify(Array.from(newViewedStories)));
+
+      // Create or update story view record in database for cross-device sync
+      const { error: viewError } = await supabase
+        .from('story_views')
+        .upsert({
+          story_id: storyId,
+          viewer_id: userId,
+          viewed_at: new Date().toISOString()
+        }, {
+          onConflict: 'story_id,viewer_id'
+        });
+
+      if (viewError) {
+        console.error('Error saving story view to database:', viewError);
+      }
+
+      // Update local stories state
+      setStories(prevStories => 
+        prevStories.map(story => 
+          story.id === storyId 
+            ? { ...story, viewed_by_current_user: true }
+            : story
+        )
+      );
+
+    } catch (error) {
+      console.error('Error marking story as viewed:', error);
+    }
+  }, [viewedStories]);
+
+  // Load viewed stories from both localStorage and database
+  const loadViewedStories = useCallback(async (userId: string) => {
+    try {
+      // Load from localStorage first (for immediate UI update)
+      const viewedStoriesKey = `viewed_stories_${userId}`;
+      const localViewedStories = localStorage.getItem(viewedStoriesKey);
+      let localViewed = new Set<string>();
+      
+      if (localViewedStories) {
+        localViewed = new Set(JSON.parse(localViewedStories));
+        setViewedStories(localViewed);
+      }
+
+      // Load from database for cross-device sync
+      const { data: storyViews, error } = await supabase
+        .from('story_views')
+        .select('story_id')
+        .eq('viewer_id', userId);
+
+      if (error) {
+        console.error('Error loading story views from database:', error);
+        return;
+      }
+
+      // Merge database views with local views
+      const dbViewedStories = new Set(storyViews?.map(view => view.story_id) || []);
+      const mergedViewed = new Set([...localViewed, ...dbViewedStories]);
+      
+      setViewedStories(mergedViewed);
+      
+      // Update localStorage with merged data
+      localStorage.setItem(viewedStoriesKey, JSON.stringify(Array.from(mergedViewed)));
+
+    } catch (error) {
+      console.error('Error loading viewed stories:', error);
+    }
+  }, []);
+
   const fetchStories = useCallback(async () => {
     try {
       // First cleanup expired photos
@@ -70,14 +149,18 @@ const StoriesContainer = React.memo(() => {
         return acc;
       }, {});
 
-      const storiesArray = Object.values(groupedStories || {});
+      const storiesArray = Object.values(groupedStories || []);
       
-      // Sort stories: unseen stories first, then seen stories
+      // Enhanced sorting: unseen stories first, then seen stories, with proper ordering
       const sortedStories = storiesArray.sort((a, b) => {
+        const aViewed = viewedStories.has(a.id);
+        const bViewed = viewedStories.has(b.id);
+        
         // If one is viewed and other is not, prioritize unviewed
-        if (a.viewed_by_current_user !== b.viewed_by_current_user) {
-          return a.viewed_by_current_user ? 1 : -1;
+        if (aViewed !== bViewed) {
+          return aViewed ? 1 : -1;
         }
+        
         // If both have same view status, sort by creation time (newest first)
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
@@ -106,60 +189,123 @@ const StoriesContainer = React.memo(() => {
       
       setCurrentUser(profile);
 
-      // Load viewed stories from localStorage
-      const viewedStoriesKey = `viewed_stories_${user.id}`;
-      const savedViewedStories = localStorage.getItem(viewedStoriesKey);
-      if (savedViewedStories) {
-        setViewedStories(new Set(JSON.parse(savedViewedStories)));
-      }
+      // Load viewed stories for this user
+      await loadViewedStories(user.id);
     }
-  }, []);
+  }, [loadViewedStories]);
 
   useEffect(() => {
     getCurrentUser();
-    fetchStories();
-    
-    // Set up realtime subscription for stories with more granular updates
-    const channel = supabase
-      .channel('stories-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'stories'
-        },
-        (payload) => {
-          console.log('Story change detected:', payload);
-          // Optimistic update for better performance
-          if (payload.eventType === 'INSERT') {
-            fetchStories();
-          } else if (payload.eventType === 'UPDATE') {
+  }, [getCurrentUser]);
+
+  // Fetch stories after user and viewed stories are loaded
+  useEffect(() => {
+    if (currentUser) {
+      fetchStories();
+    }
+  }, [currentUser, fetchStories]);
+
+  useEffect(() => {
+    if (currentUser) {
+      // Set up realtime subscription for stories with more granular updates
+      const channel = supabase
+        .channel('stories-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'stories'
+          },
+          (payload) => {
+            console.log('Story change detected:', payload);
+            // Optimistic update for better performance
+            if (payload.eventType === 'INSERT') {
+              fetchStories();
+            } else if (payload.eventType === 'UPDATE') {
+              setStories(prevStories => 
+                prevStories.map(story => 
+                  story.id === payload.new.id 
+                    ? { ...story, ...payload.new }
+                    : story
+                )
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setStories(prevStories => 
+                prevStories.filter(story => story.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe();
+
+      // Listen for story view changes for cross-device sync
+      const viewsChannel = supabase
+        .channel('story-views-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'story_views',
+            filter: `viewer_id=eq.${currentUser.id}`
+          },
+          (payload) => {
+            console.log('Story view change detected:', payload);
+            const storyId = payload.new.story_id;
+            
+            // Update local viewed stories
+            setViewedStories(prev => {
+              const newViewed = new Set(prev);
+              newViewed.add(storyId);
+              
+              // Update localStorage
+              const viewedStoriesKey = `viewed_stories_${currentUser.id}`;
+              localStorage.setItem(viewedStoriesKey, JSON.stringify(Array.from(newViewed)));
+              
+              return newViewed;
+            });
+
+            // Update stories state
             setStories(prevStories => 
               prevStories.map(story => 
-                story.id === payload.new.id 
-                  ? { ...story, ...payload.new }
+                story.id === storyId 
+                  ? { ...story, viewed_by_current_user: true }
                   : story
               )
             );
-          } else if (payload.eventType === 'DELETE') {
-            setStories(prevStories => 
-              prevStories.filter(story => story.id !== payload.old.id)
-            );
-          }
-        }
-      )
-      .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [getCurrentUser, fetchStories]);
+            // Re-sort stories after marking as viewed
+            setTimeout(() => {
+              setStories(prevStories => {
+                return [...prevStories].sort((a, b) => {
+                  const aViewed = viewedStories.has(a.id) || a.id === storyId;
+                  const bViewed = viewedStories.has(b.id);
+                  
+                  // If one is viewed and other is not, prioritize unviewed
+                  if (aViewed !== bViewed) {
+                    return aViewed ? 1 : -1;
+                  }
+                  // If both have same view status, sort by creation time (newest first)
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                });
+              });
+            }, 100);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+        supabase.removeChannel(viewsChannel);
+      };
+    }
+  }, [currentUser, fetchStories, viewedStories]);
 
   const handleStoryClick = useCallback(async (story: Story) => {
     setSelectedStory(story);
     
-    // Mark story as viewed
+    // Mark story as viewed if it's not the user's own story and hasn't been viewed
     if (story.user_id !== currentUser?.id && !viewedStories.has(story.id)) {
       try {
         const { data, error } = await supabase.rpc('increment_story_views', {
@@ -170,18 +316,10 @@ const StoriesContainer = React.memo(() => {
         if (error) {
           console.error('Error tracking story view:', error);
         } else {
-          // Update local viewed stories
-          const newViewedStories = new Set(viewedStories);
-          newViewedStories.add(story.id);
-          setViewedStories(newViewedStories);
+          // Mark as viewed with cross-device sync
+          await markStoryAsViewed(story.id, currentUser.id);
 
-          // Save to localStorage
-          if (currentUser) {
-            const viewedStoriesKey = `viewed_stories_${currentUser.id}`;
-            localStorage.setItem(viewedStoriesKey, JSON.stringify(Array.from(newViewedStories)));
-          }
-
-          // Update local state with new view count and viewed status
+          // Update local state with new view count
           setStories(prevStories => 
             prevStories.map(s => 
               s.id === story.id 
@@ -193,26 +331,12 @@ const StoriesContainer = React.memo(() => {
                 : s
             )
           );
-
-          // Re-sort stories after marking as viewed
-          setTimeout(() => {
-            setStories(prevStories => {
-              return [...prevStories].sort((a, b) => {
-                // If one is viewed and other is not, prioritize unviewed
-                if (a.viewed_by_current_user !== b.viewed_by_current_user) {
-                  return a.viewed_by_current_user ? 1 : -1;
-                }
-                // If both have same view status, sort by creation time (newest first)
-                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-              });
-            });
-          }, 100);
         }
       } catch (error) {
         console.error('Error tracking story view:', error);
       }
     }
-  }, [currentUser?.id, viewedStories, currentUser]);
+  }, [currentUser?.id, viewedStories, currentUser, markStoryAsViewed]);
 
   const userStory = useMemo(() => {
     return stories.find(story => story.user_id === currentUser?.id);
@@ -299,7 +423,7 @@ const StoriesContainer = React.memo(() => {
           </div>
         )}
 
-        {/* Other Stories */}
+        {/* Other Stories with enhanced visual indicators */}
         {otherStories.map((story) => {
           const isViewed = viewedStories.has(story.id);
           
@@ -313,7 +437,7 @@ const StoriesContainer = React.memo(() => {
                 <Avatar className={`w-12 h-12 border-2 transition-all duration-200 group-hover:scale-105 ${
                   isViewed 
                     ? 'border-gray-300 hover:border-gray-400' 
-                    : 'border-social-green hover:border-social-light-green'
+                    : 'border-social-green hover:border-social-light-green story-unseen-border'
                 }`}>
                   {story.profiles.avatar ? (
                     <AvatarImage src={story.profiles.avatar} alt={story.profiles.name} />
@@ -324,9 +448,9 @@ const StoriesContainer = React.memo(() => {
                   )}
                 </Avatar>
                 
-                {/* Green dot for unseen stories */}
+                {/* Enhanced green dot for unseen stories */}
                 {!isViewed && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-social-green rounded-full border-2 border-white animate-pulse">
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-social-green rounded-full border-2 border-white story-unseen-indicator">
                     <div className="w-full h-full bg-social-green rounded-full animate-ping opacity-75"></div>
                   </div>
                 )}
@@ -341,8 +465,8 @@ const StoriesContainer = React.memo(() => {
                   <div className="absolute inset-0 rounded-full bg-gradient-to-r from-social-green to-social-blue opacity-20" />
                 )}
               </div>
-              <span className={`text-xs font-pixelated text-center truncate max-w-[60px] ${
-                isViewed ? 'text-muted-foreground' : 'text-foreground'
+              <span className={`text-xs font-pixelated text-center truncate max-w-[60px] transition-colors duration-200 ${
+                isViewed ? 'text-muted-foreground' : 'text-foreground font-medium'
               }`}>
                 {story.profiles.name.split(' ')[0]}
               </span>
