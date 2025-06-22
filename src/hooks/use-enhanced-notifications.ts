@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useOneSignalNotifications } from '@/hooks/use-onesignal-notifications';
 
 interface NotificationData {
   id: string;
@@ -22,7 +21,6 @@ export function useEnhancedNotifications() {
   const [hasShownSystemNotification, setHasShownSystemNotification] = useState(false);
   const channelsRef = useRef<any[]>([]);
   const { toast } = useToast();
-  const { oneSignalUser, sendNotificationToUser } = useOneSignalNotifications();
 
   // Initialize user and permissions
   useEffect(() => {
@@ -33,9 +31,9 @@ export function useEnhancedNotifications() {
         if (user) {
           setCurrentUser(user);
           
-          // Check notification permission (both browser and OneSignal)
+          // Check notification permission
           if ('Notification' in window) {
-            setIsGranted(Notification.permission === 'granted' || oneSignalUser.subscribed);
+            setIsGranted(Notification.permission === 'granted');
           }
           
           // Load initial notifications
@@ -71,14 +69,7 @@ export function useEnhancedNotifications() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [oneSignalUser.subscribed, hasShownSystemNotification]);
-
-  // Update permission status when OneSignal status changes
-  useEffect(() => {
-    if ('Notification' in window) {
-      setIsGranted(Notification.permission === 'granted' || oneSignalUser.subscribed);
-    }
-  }, [oneSignalUser.subscribed]);
+  }, [hasShownSystemNotification]);
 
   // Create system notification about theme customization
   const createSystemNotification = useCallback(async (userId: string) => {
@@ -160,26 +151,15 @@ export function useEnhancedNotifications() {
 
       if (error) throw error;
 
-      // Send OneSignal notification if user is subscribed
-      if (oneSignalUser.subscribed) {
-        await sendNotificationToUser(userId, getNotificationTitle(type), content, {
-          type,
-          reference_id: referenceId
-        });
-      }
-
       return data;
     } catch (error) {
       console.error('Error creating notification:', error);
       return null;
     }
-  }, [oneSignalUser.subscribed, sendNotificationToUser]);
+  }, []);
 
   // Send browser notification (fallback)
   const sendBrowserNotification = useCallback((title: string, options?: NotificationOptions) => {
-    // If OneSignal is handling notifications, don't send browser notifications
-    if (oneSignalUser.subscribed) return null;
-
     if (!isGranted || !('Notification' in window)) return null;
 
     try {
@@ -203,7 +183,7 @@ export function useEnhancedNotifications() {
       console.error('Error showing notification:', error);
       return null;
     }
-  }, [isGranted, oneSignalUser.subscribed]);
+  }, [isGranted]);
 
   // Mark notification as read
   const markAsRead = useCallback(async (notificationId: string) => {
@@ -306,14 +286,12 @@ export function useEnhancedNotifications() {
           setNotifications(prev => [newNotification, ...prev]);
           setUnreadCount(prev => prev + 1);
 
-          // Show browser notification only if OneSignal is not handling it
-          if (!oneSignalUser.subscribed) {
-            sendBrowserNotification(getNotificationTitle(newNotification.type), {
-              body: newNotification.content,
-              tag: newNotification.type,
-              data: { id: newNotification.id, type: newNotification.type }
-            });
-          }
+          // Show browser notification
+          sendBrowserNotification(getNotificationTitle(newNotification.type), {
+            body: newNotification.content,
+            tag: newNotification.type,
+            data: { id: newNotification.id, type: newNotification.type }
+          });
 
           // Show toast with special styling for system notifications
           const isSystemNotification = newNotification.type === 'system';
@@ -337,177 +315,8 @@ export function useEnhancedNotifications() {
         })
         .subscribe();
 
-      // Messages subscription for instant notifications
-      const messagesChannel = supabase
-        .channel(`messages-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const message = payload.new;
-          
-          // Get sender info
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name, username')
-            .eq('id', message.sender_id)
-            .single();
-
-          if (sender) {
-            // Create notification
-            await createNotification(
-              currentUser.id,
-              'message',
-              `${sender.name} sent you a message`,
-              message.id
-            );
-          }
-        })
-        .subscribe();
-
-      // Friend requests subscription
-      const friendsChannel = supabase
-        .channel(`friends-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friends',
-          filter: `receiver_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const friendship = payload.new;
-          
-          // Get sender info
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name, username')
-            .eq('id', friendship.sender_id)
-            .single();
-
-          if (sender) {
-            // Create notification
-            await createNotification(
-              currentUser.id,
-              'friend_request',
-              `${sender.name} sent you a friend request`,
-              friendship.id
-            );
-          }
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'friends',
-          filter: `sender_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const friendship = payload.new;
-          
-          if (friendship.status === 'accepted') {
-            // Get receiver info
-            const { data: receiver } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', friendship.receiver_id)
-              .single();
-
-            if (receiver) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'friend_accepted',
-                `${receiver.name} accepted your friend request`,
-                friendship.id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Likes subscription
-      const likesChannel = supabase
-        .channel(`likes-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'likes'
-        }, async (payload) => {
-          const like = payload.new;
-          
-          // Check if this is a like on current user's post
-          const { data: post } = await supabase
-            .from('posts')
-            .select('user_id, content')
-            .eq('id', like.post_id)
-            .single();
-
-          if (post && post.user_id === currentUser.id && like.user_id !== currentUser.id) {
-            // Get liker info
-            const { data: liker } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', like.user_id)
-              .single();
-
-            if (liker) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'like',
-                `${liker.name} liked your post`,
-                like.post_id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Comments subscription
-      const commentsChannel = supabase
-        .channel(`comments-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'comments'
-        }, async (payload) => {
-          const comment = payload.new;
-          
-          // Check if this is a comment on current user's post
-          const { data: post } = await supabase
-            .from('posts')
-            .select('user_id, content')
-            .eq('id', comment.post_id)
-            .single();
-
-          if (post && post.user_id === currentUser.id && comment.user_id !== currentUser.id) {
-            // Get commenter info
-            const { data: commenter } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', comment.user_id)
-              .single();
-
-            if (commenter) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'comment',
-                `${commenter.name} commented on your post`,
-                comment.post_id
-              );
-            }
-          }
-        })
-        .subscribe();
-
       // Store channels for cleanup
-      channelsRef.current = [
-        notificationsChannel,
-        messagesChannel,
-        friendsChannel,
-        likesChannel,
-        commentsChannel
-      ];
+      channelsRef.current = [notificationsChannel];
     };
 
     setupRealtimeSubscriptions();
@@ -524,7 +333,7 @@ export function useEnhancedNotifications() {
       });
       channelsRef.current = [];
     };
-  }, [currentUser, isOnline, createNotification, sendBrowserNotification, toast, oneSignalUser.subscribed]);
+  }, [currentUser, isOnline, createNotification, sendBrowserNotification, toast]);
 
   // Request notification permission (browser fallback)
   const requestPermission = useCallback(async () => {
@@ -556,7 +365,7 @@ export function useEnhancedNotifications() {
   return {
     notifications,
     unreadCount,
-    isGranted: isGranted || oneSignalUser.subscribed,
+    isGranted,
     isOnline,
     markAsRead,
     markAllAsRead,
@@ -565,7 +374,6 @@ export function useEnhancedNotifications() {
     requestPermission,
     createNotification,
     fetchNotifications: () => currentUser && fetchNotifications(currentUser.id),
-    oneSignalEnabled: oneSignalUser.subscribed
   };
 }
 
