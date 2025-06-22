@@ -4,6 +4,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Users, Bell, MessageSquare, User } from 'lucide-react';
+import { useEnhancedNotifications } from '@/hooks/use-enhanced-notifications';
+import { Badge } from '@/components/ui/badge';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -14,6 +16,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
+  const { unreadCount } = useEnhancedNotifications();
 
   const getRouteFromPath = (path: string) => {
     if (path === '/') return 'dashboard';
@@ -93,9 +96,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <TabsTrigger 
                     value="notifications" 
                     onClick={() => handleTabClick('notifications')}
-                    className={`nav-tab ${currentRoute === 'notifications' ? 'active' : ''} font-pixelated p-2`}
+                    className={`nav-tab ${currentRoute === 'notifications' ? 'active' : ''} font-pixelated p-2 relative`}
                   >
                     <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && (
+                      <Badge 
+                        variant="destructive" 
+                        className="absolute -top-1 -right-1 h-3 w-3 p-0 flex items-center justify-center animate-pulse"
+                      />
+                    )}
                   </TabsTrigger>
                   <TabsTrigger 
                     value="profile" 

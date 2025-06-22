@@ -313,7 +313,7 @@ export function MobileHeader() {
           </DropdownMenu>
         </div>
         
-        {/* Bottom Navigation - Icons Only */}
+        {/* Bottom Navigation - Icons Only with notification indicators */}
         <nav className="grid grid-cols-5 border-t bg-background">
           {tabs.map((tab) => (
             <div
@@ -332,7 +332,7 @@ export function MobileHeader() {
       </header>
 
       {/* Logout Confirmation Dialog */}
-      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+      <AlertDialog open={showLogoutConfirm}  onOpenChange={setShowLogoutConfirm}>
         <AlertDialogContent className="animate-in zoom-in-95 duration-200">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-pixelated">Sign Out</AlertDialogTitle>

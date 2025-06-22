@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { MessageCircle, User, Users, Heart, Bell } from 'lucide-react';
-import { AdminNotificationPanel } from '@/components/admin/AdminNotificationPanel';
+import { MessageCircle, User, Users, Heart } from 'lucide-react';
 
 export function Index() {
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -117,25 +114,7 @@ export function Index() {
             <p className="font-pixelated text-xs sm:text-sm">© 2025 SocialChat. All rights reserved.</p>
           </div>
         </div>
-        
-        {/* Hidden Admin Notification Icon */}
-        <div className="absolute bottom-4 right-4">
-          <Button
-            onClick={() => setShowAdminPanel(true)}
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 opacity-20 hover:opacity-100 transition-opacity duration-300"
-          >
-            <Bell className="h-4 w-4" />
-          </Button>
-        </div>
       </footer>
-
-      {/* Admin Notification Panel */}
-      <AdminNotificationPanel 
-        open={showAdminPanel} 
-        onOpenChange={setShowAdminPanel} 
-      />
     </div>
   );
 }

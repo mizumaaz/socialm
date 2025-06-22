@@ -727,14 +727,6 @@ textarea:focus-visible {
   100% { opacity: 0.5; }
 }
 
-/* Disabled comment button styling */
-.comment-disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background-color: rgba(229, 231, 235, 0.5);
-  color: rgba(107, 114, 128, 0.5);
-}
-
 /* Enhanced story view indicators */
 .story-viewed {
   border-color: #d1d5db;
