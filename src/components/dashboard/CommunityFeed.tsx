@@ -828,7 +828,7 @@ export function CommunityFeed() {
                         onClick={() => toggleCommentBox(post.id)}
                         className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
                           !commentsEnabled 
-                            ? 'text-muted-foreground/50 hover:bg-orange-100' 
+                            ? 'text-muted-foreground/40 cursor-not-allowed opacity-50' 
                             : 'text-muted-foreground hover:bg-social-blue/10'
                         }`}
                       >
