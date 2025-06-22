@@ -21,7 +21,9 @@ import {
   Wifi,
   WifiOff,
   UserX,
-  Settings
+  Settings,
+  Palette,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -104,6 +106,12 @@ export function Notifications() {
   const createSampleNotifications = async (userId: string) => {
     try {
       const sampleNotifications = [
+        {
+          user_id: userId,
+          type: 'system',
+          content: "💡 Don't like the pixel font? No problem! Visit your Profile section to change themes and customize fonts & colors to your preference.",
+          read: false
+        },
         {
           user_id: userId,
           type: 'like',
@@ -302,6 +310,8 @@ export function Notifications() {
         return <Heart className="h-4 w-4 text-social-magenta" />;
       case 'comment':
         return <MessageSquare className="h-4 w-4 text-social-purple" />;
+      case 'system':
+        return <Sparkles className="h-4 w-4 text-blue-500" />;
       default:
         return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -321,6 +331,8 @@ export function Notifications() {
         return 'border-l-social-magenta bg-social-magenta/5';
       case 'comment':
         return 'border-l-social-purple bg-social-purple/5';
+      case 'system':
+        return 'border-l-blue-500 bg-blue-50 animate-pulse';
       default:
         return 'border-l-muted-foreground bg-muted/5';
     }
@@ -519,8 +531,31 @@ export function Notifications() {
           </div>
         )}
 
+        {/* Theme Customization Highlight */}
+        <div className="mx-4 mt-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-400 rounded-lg shadow-sm">
+          <div className="flex items-start gap-3">
+            <Palette className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-pixelated text-sm font-medium text-blue-800">
+                Customize Your Experience
+              </p>
+              <p className="font-pixelated text-xs text-blue-700 mt-1 leading-relaxed">
+                Don't like the pixel font? Visit your Profile section to change themes and customize fonts & colors to your preference!
+              </p>
+              <Button
+                onClick={() => window.location.href = '/profile'}
+                size="sm"
+                className="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-pixelated text-xs"
+              >
+                <Sparkles className="h-3 w-3 mr-1" />
+                Change Theme
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
-        <ScrollArea className="h-[calc(100vh-140px)] p-4 scroll-container scroll-smooth">
+        <ScrollArea className="h-[calc(100vh-240px)] p-4 scroll-container scroll-smooth">
           {notifications.length > 0 ? (
             <div className="space-y-3">
               {notifications.map((notification) => (
@@ -640,6 +675,13 @@ export function Notifications() {
                   <div>
                     <p className="font-pixelated text-xs font-medium">Likes & Comments</p>
                     <p className="font-pixelated text-xs text-muted-foreground">Interactions on your posts</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                  <Sparkles className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="font-pixelated text-xs font-medium">Theme Customization</p>
+                    <p className="font-pixelated text-xs text-muted-foreground">Change fonts, colors, and visual style in Profile</p>
                   </div>
                 </div>
               </div>

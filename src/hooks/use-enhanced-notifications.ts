@@ -19,6 +19,7 @@ export function useEnhancedNotifications() {
   const [isGranted, setIsGranted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [hasShownSystemNotification, setHasShownSystemNotification] = useState(false);
   const channelsRef = useRef<any[]>([]);
   const { toast } = useToast();
   const { oneSignalUser, sendNotificationToUser } = useOneSignalNotifications();
@@ -39,6 +40,18 @@ export function useEnhancedNotifications() {
           
           // Load initial notifications
           await fetchNotifications(user.id);
+
+          // Show system notification about theme customization (only once per session)
+          const hasShownKey = `system_notification_shown_${user.id}`;
+          const hasShown = sessionStorage.getItem(hasShownKey);
+          
+          if (!hasShown && !hasShownSystemNotification) {
+            setTimeout(() => {
+              createSystemNotification(user.id);
+              setHasShownSystemNotification(true);
+              sessionStorage.setItem(hasShownKey, 'true');
+            }, 3000); // Show after 3 seconds
+          }
         }
       } catch (error) {
         console.error('Error initializing notifications:', error);
@@ -58,7 +71,7 @@ export function useEnhancedNotifications() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [oneSignalUser.subscribed]);
+  }, [oneSignalUser.subscribed, hasShownSystemNotification]);
 
   // Update permission status when OneSignal status changes
   useEffect(() => {
@@ -66,6 +79,41 @@ export function useEnhancedNotifications() {
       setIsGranted(Notification.permission === 'granted' || oneSignalUser.subscribed);
     }
   }, [oneSignalUser.subscribed]);
+
+  // Create system notification about theme customization
+  const createSystemNotification = useCallback(async (userId: string) => {
+    try {
+      const systemNotification = {
+        user_id: userId,
+        type: 'system',
+        content: "💡 Don't like the pixel font? No problem! Visit your Profile section to change themes and customize fonts & colors to your preference.",
+        read: false
+      };
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert(systemNotification)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to local state
+      setNotifications(prev => [data, ...prev]);
+      setUnreadCount(prev => prev + 1);
+
+      // Show toast notification with highlight
+      toast({
+        title: '🎨 Customize Your Experience',
+        description: "Don't like the pixel font? Change themes in your Profile section!",
+        duration: 8000,
+        className: 'border-l-4 border-l-blue-500 bg-blue-50 text-blue-900 shadow-lg animate-pulse',
+      });
+
+    } catch (error) {
+      console.error('Error creating system notification:', error);
+    }
+  }, [toast]);
 
   // Fetch notifications from database
   const fetchNotifications = useCallback(async (userId: string) => {
@@ -267,11 +315,13 @@ export function useEnhancedNotifications() {
             });
           }
 
-          // Show toast
+          // Show toast with special styling for system notifications
+          const isSystemNotification = newNotification.type === 'system';
           toast({
             title: getNotificationTitle(newNotification.type),
             description: newNotification.content,
-            duration: 4000
+            duration: isSystemNotification ? 8000 : 4000,
+            className: isSystemNotification ? 'border-l-4 border-l-blue-500 bg-blue-50 text-blue-900 shadow-lg' : undefined
           });
         })
         .on('postgres_changes', {
@@ -532,6 +582,8 @@ function getNotificationTitle(type: string): string {
       return 'New Like';
     case 'comment':
       return 'New Comment';
+    case 'system':
+      return '🎨 Customize Your Experience';
     default:
       return 'Notification';
   }

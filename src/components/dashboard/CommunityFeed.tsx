@@ -828,7 +828,7 @@ export function CommunityFeed() {
                         onClick={() => toggleCommentBox(post.id)}
                         className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
                           !commentsEnabled 
-                            ? 'text-muted-foreground/50 cursor-not-allowed hover:bg-transparent' 
+                            ? 'text-muted-foreground/50 hover:bg-orange-100' 
                             : 'text-muted-foreground hover:bg-social-blue/10'
                         }`}
                       >
@@ -930,7 +930,7 @@ export function CommunityFeed() {
                       </div>
                     )}
 
-                    {/* Comments disabled message with enhanced styling */}
+                    {/* Enhanced Comments disabled message with better styling */}
                     {commentBoxVisible && !commentsEnabled && (
                       <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-l-4 border-orange-400 rounded-lg animate-fade-in shadow-sm">
                         <div className="flex items-center gap-3">
