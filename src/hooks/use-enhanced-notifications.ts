@@ -60,7 +60,7 @@ export function useEnhancedNotifications() {
           
           // Check notification permission (both browser and OneSignal)
           if ('Notification' in window) {
-            setIsGranted(Notification.permission === 'granted' || oneSignalUser.subscribed);
+            setIsGranted(Notification.permission === 'granted' || (oneSignalUser?.subscribed || false));
           }
           
           // Load initial notifications
@@ -92,14 +92,14 @@ export function useEnhancedNotifications() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [oneSignalUser.subscribed, showThemeNotification]);
+  }, [oneSignalUser?.subscribed, showThemeNotification]);
 
   // Update permission status when OneSignal status changes
   useEffect(() => {
     if ('Notification' in window) {
-      setIsGranted(Notification.permission === 'granted' || oneSignalUser.subscribed);
+      setIsGranted(Notification.permission === 'granted' || (oneSignalUser?.subscribed || false));
     }
-  }, [oneSignalUser.subscribed]);
+  }, [oneSignalUser?.subscribed]);
 
   // Fetch notifications from database with error handling
   const fetchNotifications = useCallback(async (userId: string) => {
@@ -120,7 +120,7 @@ export function useEnhancedNotifications() {
       }
 
       setNotifications(data || []);
-      setUnreadCount(data?.filter(n => !n.read).length || 0);
+      setUnreadCount((data || []).filter(n => !n.read).length);
     } catch (error) {
       console.error('Error fetching notifications:', error);
       // Create sample notifications as fallback
@@ -180,7 +180,7 @@ export function useEnhancedNotifications() {
       if (error) throw error;
 
       // Send OneSignal notification if user is subscribed
-      if (oneSignalUser.subscribed) {
+      if (oneSignalUser?.subscribed && sendNotificationToUser) {
         await sendNotificationToUser(userId, getNotificationTitle(type), content, {
           type,
           reference_id: referenceId
@@ -192,12 +192,12 @@ export function useEnhancedNotifications() {
       console.error('Error creating notification:', error);
       return null;
     }
-  }, [oneSignalUser.subscribed, sendNotificationToUser]);
+  }, [oneSignalUser?.subscribed, sendNotificationToUser]);
 
   // Send browser notification (fallback)
   const sendBrowserNotification = useCallback((title: string, options?: NotificationOptions) => {
     // If OneSignal is handling notifications, don't send browser notifications
-    if (oneSignalUser.subscribed) return null;
+    if (oneSignalUser?.subscribed) return null;
 
     if (!isGranted || !('Notification' in window)) return null;
 
@@ -222,7 +222,7 @@ export function useEnhancedNotifications() {
       console.error('Error showing notification:', error);
       return null;
     }
-  }, [isGranted, oneSignalUser.subscribed]);
+  }, [isGranted, oneSignalUser?.subscribed]);
 
   // Mark notification as read
   const markAsRead = useCallback(async (notificationId: string) => {
@@ -326,7 +326,7 @@ export function useEnhancedNotifications() {
           setUnreadCount(prev => prev + 1);
 
           // Show browser notification only if OneSignal is not handling it
-          if (!oneSignalUser.subscribed) {
+          if (!(oneSignalUser?.subscribed)) {
             sendBrowserNotification(getNotificationTitle(newNotification.type), {
               body: newNotification.content,
               tag: newNotification.type,
@@ -541,7 +541,7 @@ export function useEnhancedNotifications() {
       });
       channelsRef.current = [];
     };
-  }, [currentUser, isOnline, createNotification, sendBrowserNotification, toast, oneSignalUser.subscribed]);
+  }, [currentUser, isOnline, createNotification, sendBrowserNotification, toast, oneSignalUser?.subscribed]);
 
   // Request notification permission (browser fallback)
   const requestPermission = useCallback(async () => {
@@ -573,7 +573,7 @@ export function useEnhancedNotifications() {
   return {
     notifications,
     unreadCount,
-    isGranted: isGranted || oneSignalUser.subscribed,
+    isGranted: isGranted || (oneSignalUser?.subscribed || false),
     isOnline,
     markAsRead,
     markAllAsRead,
@@ -582,7 +582,7 @@ export function useEnhancedNotifications() {
     requestPermission,
     createNotification,
     fetchNotifications: () => currentUser && fetchNotifications(currentUser.id),
-    oneSignalEnabled: oneSignalUser.subscribed
+    oneSignalEnabled: oneSignalUser?.subscribed || false
   };
 }
 
