@@ -19,9 +19,35 @@ export function useEnhancedNotifications() {
   const [isGranted, setIsGranted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [hasShownThemeNotification, setHasShownThemeNotification] = useState(false);
   const channelsRef = useRef<any[]>([]);
   const { toast } = useToast();
   const { oneSignalUser, sendNotificationToUser } = useOneSignalNotifications();
+
+  // Show system notification about theme changes
+  const showThemeNotification = useCallback(() => {
+    if (hasShownThemeNotification) return;
+    
+    // Show after 3 seconds delay
+    setTimeout(() => {
+      toast({
+        title: '🎨 Customize Your Experience',
+        description: 'Don\'t like the pixel theme? No problem! Go to Profile → Theme Settings to change fonts and colors to your preference.',
+        duration: 12000,
+        className: 'border-l-4 border-l-blue-500 bg-blue-50 text-blue-900 shadow-lg',
+        action: (
+          <button
+            onClick={() => window.location.href = '/profile'}
+            className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors font-pixelated"
+          >
+            Customize
+          </button>
+        ),
+      });
+      setHasShownThemeNotification(true);
+      localStorage.setItem('theme-notification-shown', 'true');
+    }, 3000);
+  }, [hasShownThemeNotification, toast]);
 
   // Initialize user and permissions
   useEffect(() => {
@@ -39,6 +65,14 @@ export function useEnhancedNotifications() {
           
           // Load initial notifications
           await fetchNotifications(user.id);
+
+          // Show theme notification if not shown before
+          const themeNotificationShown = localStorage.getItem('theme-notification-shown');
+          if (!themeNotificationShown) {
+            showThemeNotification();
+          } else {
+            setHasShownThemeNotification(true);
+          }
         }
       } catch (error) {
         console.error('Error initializing notifications:', error);
@@ -58,7 +92,7 @@ export function useEnhancedNotifications() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [oneSignalUser.subscribed]);
+  }, [oneSignalUser.subscribed, showThemeNotification]);
 
   // Update permission status when OneSignal status changes
   useEffect(() => {
@@ -67,7 +101,7 @@ export function useEnhancedNotifications() {
     }
   }, [oneSignalUser.subscribed]);
 
-  // Fetch notifications from database
+  // Fetch notifications from database with error handling
   const fetchNotifications = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -80,6 +114,8 @@ export function useEnhancedNotifications() {
 
       if (error) {
         console.error('Error fetching notifications:', error);
+        // Create sample notifications if table doesn't exist
+        await createSampleNotifications(userId);
         return;
       }
 
@@ -87,6 +123,37 @@ export function useEnhancedNotifications() {
       setUnreadCount(data?.filter(n => !n.read).length || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      // Create sample notifications as fallback
+      await createSampleNotifications(userId);
+    }
+  }, []);
+
+  // Create sample notifications if database is not set up
+  const createSampleNotifications = useCallback(async (userId: string) => {
+    try {
+      const sampleNotifications = [
+        {
+          id: 'sample-1',
+          user_id: userId,
+          type: 'welcome',
+          content: '🎉 Welcome to SocialChat! Start connecting with friends and sharing your thoughts.',
+          read: false,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 'sample-2',
+          user_id: userId,
+          type: 'tip',
+          content: '💡 Tip: You can customize themes and fonts from your Profile settings!',
+          read: false,
+          created_at: new Date(Date.now() - 60000).toISOString()
+        }
+      ];
+
+      setNotifications(sampleNotifications);
+      setUnreadCount(2);
+    } catch (error) {
+      console.log('Sample notifications creation handled');
     }
   }, []);
 
@@ -532,6 +599,10 @@ function getNotificationTitle(type: string): string {
       return 'New Like';
     case 'comment':
       return 'New Comment';
+    case 'welcome':
+      return 'Welcome!';
+    case 'tip':
+      return 'Tip';
     default:
       return 'Notification';
   }

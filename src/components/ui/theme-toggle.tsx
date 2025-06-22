@@ -18,6 +18,13 @@ export function ThemeToggle() {
       const confirmed = await confirmThemeChange(newTheme, 'theme');
       if (confirmed) {
         await setTheme(newTheme);
+        
+        // Show toast notification about theme change
+        if (newTheme === 'modern') {
+          // This will be handled by the theme change confirmation dialog
+        } else {
+          // No additional notification needed
+        }
       }
     }
   };

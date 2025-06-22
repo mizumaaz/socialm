@@ -21,7 +21,8 @@ import {
   Wifi,
   WifiOff,
   UserX,
-  Settings
+  Settings,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -106,20 +107,20 @@ export function Notifications() {
       const sampleNotifications = [
         {
           user_id: userId,
-          type: 'like',
-          content: 'Owais liked your post',
+          type: 'welcome',
+          content: '🎉 Welcome to SocialChat! Start connecting with friends and sharing your thoughts.',
           read: false
         },
         {
           user_id: userId,
-          type: 'comment',
-          content: 'raafi jamal commented on your post',
+          type: 'tip',
+          content: '🎨 Don\'t like the pixel theme? No problem! Go to Profile → Theme Settings to change fonts and colors to your preference.',
           read: false
         },
         {
           user_id: userId,
-          type: 'like',
-          content: 'Roohi Fida liked your post',
+          type: 'feature',
+          content: '✨ Try the new Modern theme for a clean, contemporary look! Available in Profile settings.',
           read: false
         }
       ];
@@ -302,6 +303,11 @@ export function Notifications() {
         return <Heart className="h-4 w-4 text-social-magenta" />;
       case 'comment':
         return <MessageSquare className="h-4 w-4 text-social-purple" />;
+      case 'welcome':
+        return <Sparkles className="h-4 w-4 text-social-green" />;
+      case 'tip':
+      case 'feature':
+        return <Info className="h-4 w-4 text-blue-500" />;
       default:
         return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -321,6 +327,11 @@ export function Notifications() {
         return 'border-l-social-magenta bg-social-magenta/5';
       case 'comment':
         return 'border-l-social-purple bg-social-purple/5';
+      case 'welcome':
+        return 'border-l-social-green bg-social-green/5';
+      case 'tip':
+      case 'feature':
+        return 'border-l-blue-500 bg-blue-50';
       default:
         return 'border-l-muted-foreground bg-muted/5';
     }
@@ -423,7 +434,7 @@ export function Notifications() {
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto relative h-[calc(100vh-60px)] animate-fade-in">
-        {/* Header */}
+        {/* Header with enhanced notification indicator */}
         <div className="flex items-center justify-between p-4 border-b bg-background sticky top-0 z-10 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -431,7 +442,7 @@ export function Notifications() {
               {unreadCount > 0 && (
                 <Badge 
                   variant="destructive" 
-                  className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs flex items-center justify-center animate-pulse"
+                  className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs flex items-center justify-center animate-pulse shadow-lg"
                 >
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </Badge>
@@ -519,8 +530,23 @@ export function Notifications() {
           </div>
         )}
 
+        {/* Theme Notification */}
+        <div className="mx-4 mt-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-400 rounded-lg animate-fade-in shadow-sm">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-blue-500 flex-shrink-0" />
+            <div>
+              <p className="font-pixelated text-sm font-medium text-blue-800">
+                🎨 Customize Your Experience
+              </p>
+              <p className="font-pixelated text-xs text-blue-700 mt-1">
+                Don't like the pixel theme? Go to Profile → Theme Settings to change fonts and colors!
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
-        <ScrollArea className="h-[calc(100vh-140px)] p-4 scroll-container scroll-smooth">
+        <ScrollArea className="h-[calc(100vh-200px)] p-4 scroll-container scroll-smooth">
           {notifications.length > 0 ? (
             <div className="space-y-3">
               {notifications.map((notification) => (
