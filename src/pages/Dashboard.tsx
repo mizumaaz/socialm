@@ -5,9 +5,7 @@ import { StoriesContainer } from '@/components/stories/StoriesContainer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Send, Image as ImageIcon, X, MessageSquareOff } from 'lucide-react';
+import { Send, Image as ImageIcon, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,7 +15,6 @@ export function Dashboard() {
   const [isPosting, setIsPosting] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [commentsEnabled, setCommentsEnabled] = useState(true);
   const [feedKey, setFeedKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -125,41 +122,18 @@ export function Dashboard() {
         imageUrl = data.publicUrl;
       }
 
-      // Create post data with backward compatibility
-      const postData: any = {
-        content: postContent.trim(),
-        user_id: user.id,
-        image_url: imageUrl
-      };
+      // Create post
+      const { error } = await supabase
+        .from('posts')
+        .insert({
+          content: postContent.trim(),
+          user_id: user.id,
+          image_url: imageUrl
+        });
 
-      // Only add comments_enabled if the column exists
-      try {
-        // Try to insert with comments_enabled first
-        const { error } = await supabase
-          .from('posts')
-          .insert({
-            ...postData,
-            comments_enabled: commentsEnabled
-          });
-
-        if (error) {
-          // If it fails due to column not existing, try without it
-          if (error.message?.includes('comments_enabled')) {
-            const { error: fallbackError } = await supabase
-              .from('posts')
-              .insert(postData);
-            
-            if (fallbackError) throw fallbackError;
-          } else {
-            throw error;
-          }
-        }
-      } catch (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setPostContent('');
-      setCommentsEnabled(true); // Reset to default
       removeImage();
       
       // Force feed refresh by updating key - this will trigger CommunityFeed to re-mount
@@ -167,9 +141,7 @@ export function Dashboard() {
       
       toast({
         title: 'Success',
-        description: commentsEnabled 
-          ? 'Your post has been shared!' 
-          : 'Your post has been shared with comments disabled!'
+        description: 'Your post has been shared!'
       });
     } catch (error) {
       console.error('Error creating post:', error);
@@ -229,31 +201,6 @@ export function Dashboard() {
                     </Button>
                   </div>
                 )}
-
-                {/* Comments Toggle */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-muted">
-                  <div className="flex items-center gap-3">
-                    <MessageSquareOff className={`h-4 w-4 ${commentsEnabled ? 'text-muted-foreground' : 'text-orange-500'}`} />
-                    <div>
-                      <Label htmlFor="comments-toggle" className="font-pixelated text-xs font-medium cursor-pointer">
-                        {commentsEnabled ? 'Comments Enabled' : 'Comments Disabled'}
-                      </Label>
-                      <p className="font-pixelated text-xs text-muted-foreground">
-                        {commentsEnabled 
-                          ? 'People can comment on this post' 
-                          : 'Comments are disabled for this post'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    id="comments-toggle"
-                    checked={commentsEnabled}
-                    onCheckedChange={setCommentsEnabled}
-                    disabled={isPosting}
-                    className="data-[state=checked]:bg-social-green"
-                  />
-                </div>
                 
                 <div className="flex items-center justify-between gap-3 pt-1">
                   <div className="flex items-center gap-3">
