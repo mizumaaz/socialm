@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X } from 'lucide-react';
+import { Heart, MessageCircle, Send, MoreVertical, Edit, Trash2, ArrowUp, ChevronDown, ChevronUp, Save, X, MessageSquareOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,7 @@ interface Post {
   created_at: string;
   updated_at: string;
   user_id: string;
+  comments_enabled?: boolean; // Make optional for backward compatibility
   profiles: {
     name: string;
     username: string;
@@ -98,6 +99,19 @@ export function CommunityFeed() {
   };
 
   const toggleCommentBox = (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    
+    // Check if comments are disabled for this post (default to enabled if undefined)
+    if (post && post.comments_enabled === false) {
+      toast({
+        variant: 'destructive',
+        title: 'Comments disabled',
+        description: 'Comments are not allowed on this post',
+        duration: 4000,
+      });
+      return;
+    }
+
     setShowCommentBox(prev => ({
       ...prev,
       [postId]: !prev[postId]
@@ -136,7 +150,7 @@ export function CommunityFeed() {
     }
   };
 
-  // Optimized background fetch
+  // Optimized background fetch with backward compatibility
   const fetchPostsInBackground = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -148,6 +162,7 @@ export function CommunityFeed() {
           created_at,
           updated_at,
           user_id,
+          comments_enabled,
           profiles:user_id (
             name,
             username,
@@ -159,6 +174,34 @@ export function CommunityFeed() {
 
       if (error) {
         console.error('Error fetching posts:', error);
+        // If comments_enabled column doesn't exist, try without it
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            content,
+            image_url,
+            created_at,
+            updated_at,
+            user_id,
+            profiles:user_id (
+              name,
+              username,
+              avatar
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (fallbackError) throw fallbackError;
+        
+        // Add default comments_enabled = true for backward compatibility
+        const postsWithCommentsEnabled = fallbackData?.map(post => ({
+          ...post,
+          comments_enabled: true
+        })) || [];
+
+        await fetchLikesAndComments(postsWithCommentsEnabled);
         return;
       }
 
@@ -206,6 +249,7 @@ export function CommunityFeed() {
 
         return {
           ...post,
+          comments_enabled: post.comments_enabled !== false, // Default to true if undefined
           likes: postLikes,
           comments: postComments,
           _count: {
@@ -221,6 +265,7 @@ export function CommunityFeed() {
       // Set posts without likes/comments if there's an error
       setPosts(postsData.map(post => ({
         ...post,
+        comments_enabled: post.comments_enabled !== false,
         likes: [],
         comments: [],
         _count: { likes: 0, comments: 0 }
@@ -329,6 +374,17 @@ export function CommunityFeed() {
   const handleComment = async (postId: string) => {
     const content = commentInputs[postId]?.trim();
     if (!content || !currentUser || submittingComments[postId]) return;
+
+    const post = posts.find(p => p.id === postId);
+    if (post && post.comments_enabled === false) {
+      toast({
+        variant: 'destructive',
+        title: 'Comments disabled',
+        description: 'Comments are not allowed on this post',
+        duration: 4000,
+      });
+      return;
+    }
 
     try {
       setSubmittingComments(prev => ({ ...prev, [postId]: true }));
@@ -622,6 +678,7 @@ export function CommunityFeed() {
           const commentsExpanded = expandedComments[post.id];
           const commentBoxVisible = showCommentBox[post.id];
           const isEdited = post.updated_at !== post.created_at;
+          const commentsEnabled = post.comments_enabled !== false; // Default to true
 
           return (
             <Card key={post.id} className="card-gradient animate-fade-in shadow-lg hover:shadow-xl transition-all duration-200 card-hover">
@@ -658,6 +715,14 @@ export function CommunityFeed() {
                           <span className="font-pixelated text-xs text-muted-foreground">
                             (edited)
                           </span>
+                        )}
+                        {!commentsEnabled && (
+                          <div className="flex items-center gap-1">
+                            <MessageSquareOff className="h-3 w-3 text-orange-500" />
+                            <span className="font-pixelated text-xs text-orange-600">
+                              Comments disabled
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -761,7 +826,11 @@ export function CommunityFeed() {
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleCommentBox(post.id)}
-                        className="font-pixelated text-xs text-muted-foreground hover:bg-social-blue/10 transition-all duration-200 btn-hover-lift"
+                        className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
+                          !commentsEnabled 
+                            ? 'text-muted-foreground/40 cursor-not-allowed opacity-50' 
+                            : 'text-muted-foreground hover:bg-social-blue/10'
+                        }`}
                       >
                         <MessageCircle className="h-4 w-4 mr-1" />
                         {post._count?.comments || 0}
@@ -835,7 +904,7 @@ export function CommunityFeed() {
                     )}
                     
                     {/* Add Comment - Hidden by default, show when comment button is clicked */}
-                    {commentBoxVisible && (
+                    {commentBoxVisible && commentsEnabled && (
                       <div className="mt-4 flex gap-2 animate-fade-in">
                         <Textarea
                           placeholder="Write a comment..."
@@ -858,6 +927,23 @@ export function CommunityFeed() {
                         >
                           <Send className="h-3 w-3" />
                         </Button>
+                      </div>
+                    )}
+
+                    {/* Enhanced Comments disabled message with better styling */}
+                    {commentBoxVisible && !commentsEnabled && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-l-4 border-orange-400 rounded-lg animate-fade-in shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <MessageSquareOff className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                          <div>
+                            <p className="font-pixelated text-sm font-medium text-orange-800">
+                              Comments are disabled
+                            </p>
+                            <p className="font-pixelated text-xs text-orange-700 mt-1">
+                              The author has disabled comments for this post
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </>
