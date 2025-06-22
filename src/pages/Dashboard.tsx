@@ -125,14 +125,20 @@ export function Dashboard() {
         imageUrl = data.publicUrl;
       }
 
-      // Try to insert with comments_enabled first
+      // Create post data with backward compatibility
+      const postData: any = {
+        content: postContent.trim(),
+        user_id: user.id,
+        image_url: imageUrl
+      };
+
+      // Only add comments_enabled if the column exists
       try {
+        // Try to insert with comments_enabled first
         const { error } = await supabase
           .from('posts')
           .insert({
-            content: postContent.trim(),
-            user_id: user.id,
-            image_url: imageUrl,
+            ...postData,
             comments_enabled: commentsEnabled
           });
 
@@ -141,11 +147,7 @@ export function Dashboard() {
           if (error.message?.includes('comments_enabled')) {
             const { error: fallbackError } = await supabase
               .from('posts')
-              .insert({
-                content: postContent.trim(),
-                user_id: user.id,
-                image_url: imageUrl
-              });
+              .insert(postData);
             
             if (fallbackError) throw fallbackError;
           } else {
@@ -164,11 +166,10 @@ export function Dashboard() {
       setFeedKey(prev => prev + 1);
       
       toast({
-        title: '✅ Post Shared!',
+        title: 'Success',
         description: commentsEnabled 
-          ? 'Your post has been shared with the community!' 
-          : 'Your post has been shared with comments disabled!',
-        duration: 3000,
+          ? 'Your post has been shared!' 
+          : 'Your post has been shared with comments disabled!'
       });
     } catch (error) {
       console.error('Error creating post:', error);
@@ -229,7 +230,7 @@ export function Dashboard() {
                   </div>
                 )}
 
-                {/* Comments Toggle with enhanced styling */}
+                {/* Comments Toggle */}
                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-muted">
                   <div className="flex items-center gap-3">
                     <MessageSquareOff className={`h-4 w-4 ${commentsEnabled ? 'text-muted-foreground' : 'text-orange-500'}`} />

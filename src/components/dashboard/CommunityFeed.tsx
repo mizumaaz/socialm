@@ -34,7 +34,7 @@ interface Post {
   created_at: string;
   updated_at: string;
   user_id: string;
-  comments_enabled?: boolean;
+  comments_enabled?: boolean; // Make optional for backward compatibility
   profiles: {
     name: string;
     username: string;
@@ -105,10 +105,9 @@ export function CommunityFeed() {
     if (post && post.comments_enabled === false) {
       toast({
         variant: 'destructive',
-        title: '💬 Comments Disabled',
+        title: 'Comments disabled',
         description: 'Comments are not allowed on this post',
         duration: 4000,
-        className: 'border-l-4 border-l-orange-500 bg-orange-50 text-orange-900 shadow-lg',
       });
       return;
     }
@@ -151,7 +150,7 @@ export function CommunityFeed() {
     }
   };
 
-  // Optimized background fetch with caching and error handling
+  // Optimized background fetch with backward compatibility
   const fetchPostsInBackground = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -175,7 +174,7 @@ export function CommunityFeed() {
 
       if (error) {
         console.error('Error fetching posts:', error);
-        // Fallback without comments_enabled column for backward compatibility
+        // If comments_enabled column doesn't exist, try without it
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('posts')
           .select(`
@@ -212,7 +211,7 @@ export function CommunityFeed() {
     }
   }, []);
 
-  // Optimized function to fetch likes and comments in batch
+  // Separate function to fetch likes and comments
   const fetchLikesAndComments = async (postsData: any[]) => {
     try {
       const postIds = postsData.map(post => post.id);
@@ -222,7 +221,6 @@ export function CommunityFeed() {
         return;
       }
 
-      // Batch fetch likes and comments for better performance
       const [likesData, commentsData] = await Promise.all([
         supabase
           .from('likes')
@@ -297,7 +295,6 @@ export function CommunityFeed() {
     setCurrentUser(user);
   }, []);
 
-  // Optimized like handling with immediate UI feedback
   const handleLike = async (postId: string) => {
     if (!currentUser || likingPosts[postId]) return;
 
@@ -310,7 +307,15 @@ export function CommunityFeed() {
       const existingLike = post.likes.find(like => like.user_id === currentUser.id);
 
       if (existingLike) {
-        // Unlike - Optimistic update first
+        // Unlike
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('id', existingLike.id);
+
+        if (error) throw error;
+
+        // Optimistic update
         setPosts(prevPosts =>
           prevPosts.map(p =>
             p.id === postId
@@ -319,54 +324,14 @@ export function CommunityFeed() {
                   likes: p.likes.filter(like => like.id !== existingLike.id),
                   _count: {
                     ...p._count,
-                    likes: Math.max(0, (p._count?.likes || 0) - 1)
+                    likes: (p._count?.likes || 0) - 1
                   }
                 }
               : p
           )
         );
-
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('id', existingLike.id);
-
-        if (error) {
-          // Revert on error
-          setPosts(prevPosts =>
-            prevPosts.map(p =>
-              p.id === postId
-                ? {
-                    ...p,
-                    likes: [...p.likes, existingLike],
-                    _count: {
-                      ...p._count,
-                      likes: (p._count?.likes || 0) + 1
-                    }
-                  }
-                : p
-            )
-          );
-          throw error;
-        }
       } else {
-        // Like - Optimistic update first
-        const tempLike = { id: 'temp-' + Date.now(), user_id: currentUser.id };
-        setPosts(prevPosts =>
-          prevPosts.map(p =>
-            p.id === postId
-              ? {
-                  ...p,
-                  likes: [...p.likes, tempLike],
-                  _count: {
-                    ...p._count,
-                    likes: (p._count?.likes || 0) + 1
-                  }
-                }
-              : p
-          )
-        );
-
+        // Like
         const { data, error } = await supabase
           .from('likes')
           .insert({
@@ -376,34 +341,19 @@ export function CommunityFeed() {
           .select()
           .single();
 
-        if (error) {
-          // Revert on error
-          setPosts(prevPosts =>
-            prevPosts.map(p =>
-              p.id === postId
-                ? {
-                    ...p,
-                    likes: p.likes.filter(like => like.id !== tempLike.id),
-                    _count: {
-                      ...p._count,
-                      likes: Math.max(0, (p._count?.likes || 0) - 1)
-                    }
-                  }
-                : p
-            )
-          );
-          throw error;
-        }
+        if (error) throw error;
 
-        // Replace temp like with real like
+        // Optimistic update
         setPosts(prevPosts =>
           prevPosts.map(p =>
             p.id === postId
               ? {
                   ...p,
-                  likes: p.likes.map(like => 
-                    like.id === tempLike.id ? { id: data.id, user_id: currentUser.id } : like
-                  )
+                  likes: [...p.likes, { id: data.id, user_id: currentUser.id }],
+                  _count: {
+                    ...p._count,
+                    likes: (p._count?.likes || 0) + 1
+                  }
                 }
               : p
           )
@@ -429,10 +379,9 @@ export function CommunityFeed() {
     if (post && post.comments_enabled === false) {
       toast({
         variant: 'destructive',
-        title: '💬 Comments Disabled',
+        title: 'Comments disabled',
         description: 'Comments are not allowed on this post',
         duration: 4000,
-        className: 'border-l-4 border-l-orange-500 bg-orange-50 text-orange-900 shadow-lg',
       });
       return;
     }
@@ -879,7 +828,7 @@ export function CommunityFeed() {
                         onClick={() => toggleCommentBox(post.id)}
                         className={`font-pixelated text-xs transition-all duration-200 btn-hover-lift ${
                           !commentsEnabled 
-                            ? 'text-muted-foreground/50 cursor-pointer hover:bg-orange-50' 
+                            ? 'text-muted-foreground/50 cursor-not-allowed hover:bg-transparent' 
                             : 'text-muted-foreground hover:bg-social-blue/10'
                         }`}
                       >
@@ -981,14 +930,14 @@ export function CommunityFeed() {
                       </div>
                     )}
 
-                    {/* Enhanced Comments disabled message with better styling */}
+                    {/* Comments disabled message with enhanced styling */}
                     {commentBoxVisible && !commentsEnabled && (
                       <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-l-4 border-orange-400 rounded-lg animate-fade-in shadow-sm">
                         <div className="flex items-center gap-3">
                           <MessageSquareOff className="h-5 w-5 text-orange-500 flex-shrink-0" />
                           <div>
                             <p className="font-pixelated text-sm font-medium text-orange-800">
-                              💬 Comments are disabled
+                              Comments are disabled
                             </p>
                             <p className="font-pixelated text-xs text-orange-700 mt-1">
                               The author has disabled comments for this post
