@@ -1,18 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
-  <!-- Homepage -->
+  <!-- Homepage - Most important page -->
   <url>
     <loc>https://socialchat.site/</loc>
     <lastmod>2025-01-24</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://socialchat.site/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png</image:loc>
+      <image:title>SocialChat - Real-time Social Messaging Platform</image:title>
+      <image:caption>Connect with friends through real-time messaging, posts, and stories</image:caption>
+    </image:image>
   </url>
 
-  <!-- Public pages that should be indexed -->
+  <!-- Public authentication pages -->
   <url>
     <loc>https://socialchat.site/login</loc>
     <lastmod>2025-01-24</lastmod>
@@ -27,8 +34,22 @@
     <priority>0.8</priority>
   </url>
 
-  <!-- Privacy Policy and Terms (if you add them later) -->
+  <!-- Important static pages (when added) -->
   <!-- 
+  <url>
+    <loc>https://socialchat.site/about</loc>
+    <lastmod>2025-01-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://socialchat.site/features</loc>
+    <lastmod>2025-01-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
   <url>
     <loc>https://socialchat.site/privacy</loc>
     <lastmod>2025-01-24</lastmod>
@@ -40,6 +61,27 @@
     <loc>https://socialchat.site/terms</loc>
     <lastmod>2025-01-24</lastmod>
     <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://socialchat.site/contact</loc>
+    <lastmod>2025-01-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://socialchat.site/help</loc>
+    <lastmod>2025-01-24</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
+    <loc>https://socialchat.site/blog</loc>
+    <lastmod>2025-01-24</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   -->
