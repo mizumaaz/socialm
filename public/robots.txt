@@ -1,14 +1,100 @@
+User-agent: *
+Allow: /
+
+# Allow all major search engines and AI crawlers
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
-User-agent: Twitterbot
+User-agent: Slurp
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: YandexBot
 Allow: /
 
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
+User-agent: Twitterbot
 Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# AI Platform Crawlers
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# Restrict sensitive areas
+Disallow: /admin
+Disallow: /api/
+Disallow: /login
+Disallow: /register
+Disallow: /dashboard
+Disallow: /messages
+Disallow: /notifications
+Disallow: /profile
+Disallow: /settings
+Disallow: /friends
+Disallow: /_next/
+Disallow: /node_modules/
+Disallow: /.git/
+Disallow: /supabase/
+Disallow: /src/
+Disallow: /dist/
+Disallow: /*.json$
+Disallow: /*.config.*
+Disallow: /package.json
+Disallow: /tsconfig.json
+Disallow: /vite.config.ts
+Disallow: /.env*
+
+# Allow public assets
+Allow: /lovable-uploads/
+Allow: /sounds/
+Allow: /*.css
+Allow: /*.js
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.jpeg
+Allow: /*.gif
+Allow: /*.svg
+Allow: /*.ico
+Allow: /*.webp
+Allow: /*.mp3
+Allow: /*.wav
+
+# Crawl delay (be respectful)
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://socialchat.site/sitemap.xml

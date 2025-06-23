@@ -1,0 +1,19 @@
+Contact: mailto:support@socialchat.site
+Expires: 2025-12-31T23:59:59.000Z
+Encryption: https://socialchat.site/pgp-key.txt
+Preferred-Languages: en
+Canonical: https://socialchat.site/.well-known/security.txt
+Policy: https://socialchat.site/security-policy
+Acknowledgments: https://socialchat.site/security-acknowledgments
+
+# Security Policy
+# If you discover a security vulnerability, please report it to:
+# Email: support@socialchat.site
+# 
+# Please include:
+# - Description of the vulnerability
+# - Steps to reproduce
+# - Potential impact
+# - Your contact information
+#
+# We take security seriously and will respond within 48 hours.
