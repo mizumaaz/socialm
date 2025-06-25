@@ -4,13 +4,14 @@ import { getStorage } from 'firebase/storage';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAXDc6PR-m2MBa0oklp9ObJggDmnvvn4RQ",
-  authDomain: "mzsocialchat.firebaseapp.com",
-  projectId: "mzsocialchat",
-  storageBucket: "mzsocialchat.firebasestorage.app",
-  messagingSenderId: "1070261752972",
-  appId: "1:1070261752972:web:34575b057039e81e0997a9",
-  measurementId: "G-RDCJQCQQ62"
+  apiKey: "AIzaSyCUoCrl4lm-eyYn6axfGBRPHmSVIv4AOlQ",
+  authDomain: "socialchat-b6382.firebaseapp.com",
+  databaseURL: "https://socialchat-b6382-default-rtdb.firebaseio.com",
+  projectId: "socialchat-b6382",
+  storageBucket: "socialchat-b6382.firebasestorage.app",
+  messagingSenderId: "753198655677",
+  appId: "1:753198655677:web:942fc9658bfc05e69eafd4",
+  measurementId: "G-JQ817X706H"
 };
 
 // Initialize Firebase
