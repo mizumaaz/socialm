@@ -4,13 +4,14 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compa
 
 // Initialize Firebase
 firebase.initializeApp({
-  apiKey: "AIzaSyAXDc6PR-m2MBa0oklp9ObJggDmnvvn4RQ",
-  authDomain: "mzsocialchat.firebaseapp.com",
-  projectId: "mzsocialchat",
-  storageBucket: "mzsocialchat.firebasestorage.app",
-  messagingSenderId: "1070261752972",
-  appId: "1:1070261752972:web:34575b057039e81e0997a9",
-  measurementId: "G-RDCJQCQQ62"
+  apiKey: "AIzaSyCUoCrl4lm-eyYn6axfGBRPHmSVIv4AOlQ",
+  authDomain: "socialchat-b6382.firebaseapp.com",
+  databaseURL: "https://socialchat-b6382-default-rtdb.firebaseio.com",
+  projectId: "socialchat-b6382",
+  storageBucket: "socialchat-b6382.firebasestorage.app",
+  messagingSenderId: "753198655677",
+  appId: "1:753198655677:web:942fc9658bfc05e69eafd4",
+  measurementId: "G-JQ817X706H"
 });
 
 // Retrieve Firebase Messaging object
@@ -20,12 +21,12 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
   console.log('Received background message:', payload);
 
-  const notificationTitle = payload.notification.title || 'SocialChat Admin';
+  const notificationTitle = payload.notification.title || 'SocialChat';
   const notificationOptions = {
     body: payload.notification.body || 'You have a new notification',
     icon: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
     badge: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
-    tag: 'admin-broadcast',
+    tag: 'socialchat-notification',
     requireInteraction: true,
     data: payload.data,
     actions: [
@@ -57,18 +58,18 @@ self.addEventListener('notificationclick', function(event) {
   }
 });
 
-// Handle push events for admin broadcasts
+// Handle push events
 self.addEventListener('push', function(event) {
   console.log('Push event received:', event);
 
   if (event.data) {
     const data = event.data.json();
-    const title = data.title || 'SocialChat Admin';
+    const title = data.title || 'SocialChat';
     const options = {
       body: data.body || 'You have a new notification',
       icon: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
       badge: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
-      tag: 'admin-broadcast',
+      tag: 'socialchat-notification',
       requireInteraction: true,
       data: data.data || {},
       actions: [
@@ -86,33 +87,5 @@ self.addEventListener('push', function(event) {
     event.waitUntil(
       self.registration.showNotification(title, options)
     );
-  }
-});
-
-// Handle message events for real-time admin broadcasts
-self.addEventListener('message', function(event) {
-  if (event.data && event.data.type === 'ADMIN_BROADCAST') {
-    const { title, body, data } = event.data;
-    
-    const notificationOptions = {
-      body: body,
-      icon: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
-      badge: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
-      tag: 'admin-broadcast',
-      requireInteraction: true,
-      data: data || {},
-      actions: [
-        {
-          action: 'open',
-          title: 'Open SocialChat'
-        },
-        {
-          action: 'dismiss',
-          title: 'Dismiss'
-        }
-      ]
-    };
-
-    self.registration.showNotification(title, notificationOptions);
   }
 });
