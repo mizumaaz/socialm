@@ -1,4 +1,6 @@
 import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -13,6 +15,10 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase services
+export const db = getFirestore(app);
+export const storage = getStorage(app);
 
 // Initialize Firebase Cloud Messaging and get a reference to the service
 let messaging: any = null;
