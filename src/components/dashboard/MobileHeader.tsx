@@ -7,8 +7,7 @@ import {
   Bell, 
   User,
   Menu,
-  LogOut,
-  Layers
+  LogOut
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -131,7 +130,6 @@ export function MobileHeader() {
   const tabs: MobileTab[] = [
     { path: '/dashboard', label: 'Home', icon: <Home className="h-5 w-5" /> },
     { path: '/friends', label: 'Friends', icon: <Users className="h-5 w-5" /> },
-    { path: '/vortex', label: 'Vortex', icon: <Layers className="h-5 w-5" /> },
     { path: '/messages', label: 'Messages', icon: <MessageSquare className="h-5 w-5" /> },
     { 
       path: '/notifications', 
@@ -316,7 +314,7 @@ export function MobileHeader() {
         </div>
         
         {/* Bottom Navigation - Icons Only */}
-        <nav className="grid grid-cols-6 border-t bg-background">
+        <nav className="grid grid-cols-5 border-t bg-background">
           {tabs.map((tab) => (
             <div
               key={tab.path} 

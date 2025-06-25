@@ -19,19 +19,6 @@
     </image:image>
   </url>
 
-  <!-- Vortex Group Chat Feature -->
-  <url>
-    <loc>https://socialchat.site/vortex</loc>
-    <lastmod>2025-01-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-    <image:image>
-      <image:loc>https://socialchat.site/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png</image:loc>
-      <image:title>Vortex Group Chat on SocialChat</image:title>
-      <image:caption>Join private group chats with friends and communities</image:caption>
-    </image:image>
-  </url>
-
   <!-- Public authentication pages -->
   <url>
     <loc>https://socialchat.site/login</loc>

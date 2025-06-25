@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
 import './index.css';
 import { PerformanceOptimizer } from './components/dashboard/PerformanceOptimizer.tsx';
-import { DynamicSEO } from './components/seo/DynamicSEO.tsx';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -28,7 +27,6 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <PerformanceOptimizer>
-        <DynamicSEO />
         <App />
       </PerformanceOptimizer>
     </QueryClientProvider>
