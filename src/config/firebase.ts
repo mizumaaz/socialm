@@ -1,25 +1,18 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCUoCrl4lm-eyYn6axfGBRPHmSVIv4AOlQ",
-  authDomain: "socialchat-b6382.firebaseapp.com",
-  databaseURL: "https://socialchat-b6382-default-rtdb.firebaseio.com",
-  projectId: "socialchat-b6382",
-  storageBucket: "socialchat-b6382.firebasestorage.app",
-  messagingSenderId: "753198655677",
-  appId: "1:753198655677:web:942fc9658bfc05e69eafd4",
-  measurementId: "G-JQ817X706H"
+  apiKey: "AIzaSyAXDc6PR-m2MBa0oklp9ObJggDmnvvn4RQ",
+  authDomain: "mzsocialchat.firebaseapp.com",
+  projectId: "mzsocialchat",
+  storageBucket: "mzsocialchat.firebasestorage.app",
+  messagingSenderId: "1070261752972",
+  appId: "1:1070261752972:web:34575b057039e81e0997a9",
+  measurementId: "G-RDCJQCQQ62"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize Firebase services
-export const db = getFirestore(app);
-export const storage = getStorage(app);
 
 // Initialize Firebase Cloud Messaging and get a reference to the service
 let messaging: any = null;

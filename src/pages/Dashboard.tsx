@@ -9,7 +9,6 @@ import { Send, Image as ImageIcon, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { firebasePostService } from '@/services/firebaseService';
 
 export function Dashboard() {
   const [postContent, setPostContent] = useState('');
@@ -17,33 +16,10 @@ export function Dashboard() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [feedKey, setFeedKey] = useState(0);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const postBoxRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-
-  // Get current user
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-          
-          setCurrentUser(profile);
-        }
-      } catch (error) {
-        console.error('Error fetching current user:', error);
-      }
-    };
-
-    getCurrentUser();
-  }, []);
 
   // Listen for scroll to top event with improved implementation
   useEffect(() => {
@@ -111,70 +87,62 @@ export function Dashboard() {
   };
 
   const handlePost = async () => {
-    if ((!postContent.trim() && !selectedImage) || isPosting || !currentUser) return;
+    if ((!postContent.trim() && !selectedImage) || isPosting) return;
 
     try {
       setIsPosting(true);
+      const { data: { user } } = await supabase.auth.getUser();
       
-      // Try Firebase first, fallback to Supabase
-      try {
-        await firebasePostService.createPost(postContent.trim(), selectedImage, {
-          id: currentUser.id,
-          name: currentUser.name,
-          username: currentUser.username,
-          avatar: currentUser.avatar
-        });
-
+      if (!user) {
         toast({
-          title: 'Success',
-          description: 'Your post has been shared with Firebase!'
+          variant: 'destructive',
+          title: 'Error',
+          description: 'You must be logged in to post'
         });
-      } catch (firebaseError) {
-        console.log('Firebase failed, using Supabase fallback:', firebaseError);
-        
-        // Fallback to Supabase
-        let imageUrl = null;
-
-        if (selectedImage) {
-          const fileExt = selectedImage.name.split('.').pop();
-          const fileName = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('posts')
-            .upload(fileName, selectedImage);
-
-          if (uploadError) throw uploadError;
-
-          const { data } = supabase.storage
-            .from('posts')
-            .getPublicUrl(fileName);
-
-          imageUrl = data.publicUrl;
-        }
-
-        // Create post in Supabase
-        const { error } = await supabase
-          .from('posts')
-          .insert({
-            content: postContent.trim(),
-            user_id: currentUser.id,
-            image_url: imageUrl
-          });
-
-        if (error) throw error;
-
-        toast({
-          title: 'Success',
-          description: 'Your post has been shared!'
-        });
+        return;
       }
+
+      let imageUrl = null;
+
+      // Upload image if selected
+      if (selectedImage) {
+        const fileExt = selectedImage.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('posts')
+          .upload(fileName, selectedImage);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+          .from('posts')
+          .getPublicUrl(fileName);
+
+        imageUrl = data.publicUrl;
+      }
+
+      // Create post
+      const { error } = await supabase
+        .from('posts')
+        .insert({
+          content: postContent.trim(),
+          user_id: user.id,
+          image_url: imageUrl
+        });
+
+      if (error) throw error;
 
       setPostContent('');
       removeImage();
       
-      // Force feed refresh by updating key
+      // Force feed refresh by updating key - this will trigger CommunityFeed to re-mount
       setFeedKey(prev => prev + 1);
       
+      toast({
+        title: 'Success',
+        description: 'Your post has been shared!'
+      });
     } catch (error) {
       console.error('Error creating post:', error);
       toast({
@@ -211,7 +179,7 @@ export function Dashboard() {
                   value={postContent}
                   onChange={(e) => setPostContent(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="w-full min-h-[80px] max-h-[160px] font-pixelated text-xs resize-none focus:ring-2 focus:ring-social-green/20 transition-all duration-200"
+                  className="w-full min-h-[80px] max-h-[160px] font-pixelated text-sm resize-none focus:ring-2 focus:ring-social-green/20 transition-all duration-200"
                   disabled={isPosting}
                 />
                 
