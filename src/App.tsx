@@ -9,7 +9,6 @@ import { Session } from "@supabase/supabase-js";
 import { LoadingScreen } from "@/components/ui/loading-screen";
 import { useTheme } from "@/hooks/use-theme";
 import { FirebaseNotificationProvider } from "@/components/notifications/FirebaseNotificationProvider";
-import { RealtimeNotificationProvider } from "@/components/notifications/RealtimeNotificationProvider";
 import { useToast } from "@/hooks/use-toast";
 
 // Pages
@@ -63,6 +62,27 @@ const App = () => {
     
     document.title = "SocialChat - Connect with Friends";
   }, [theme, colorTheme, setTheme, setColorTheme]);
+
+  // Listen for admin broadcast toast notifications (for ALL users)
+  useEffect(() => {
+    const handleAdminBroadcastToast = (event: CustomEvent) => {
+      const { title, message } = event.detail;
+      
+      // Show toast notification for ALL users (regardless of notification permission)
+      toast({
+        title: `📢 ${title}`,
+        description: message,
+        duration: 10000,
+        className: 'border-l-4 border-l-orange-500 bg-orange-50 text-orange-900 shadow-lg',
+      });
+    };
+
+    window.addEventListener('adminBroadcastToast', handleAdminBroadcastToast as EventListener);
+
+    return () => {
+      window.removeEventListener('adminBroadcastToast', handleAdminBroadcastToast as EventListener);
+    };
+  }, [toast]);
   
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -106,82 +126,80 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <FirebaseNotificationProvider>
-        <RealtimeNotificationProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                {/* Public Routes */}
-                <Route 
-                  path="/" 
-                  element={session ? <Navigate to="/dashboard" replace /> : <Index />} 
-                />
-                <Route 
-                  path="/login" 
-                  element={session ? <Navigate to="/dashboard" replace /> : <Login />} 
-                />
-                <Route 
-                  path="/register" 
-                  element={session ? <Navigate to="/dashboard" replace /> : <Register />} 
-                />
-                
-                {/* Protected Routes */}
-                <Route 
-                  path="/dashboard" 
-                  element={
-                    <AuthGuard>
-                      <Dashboard />
-                    </AuthGuard>
-                  } 
-                />
-                <Route 
-                  path="/friends" 
-                  element={
-                    <AuthGuard>
-                      <Friends />
-                    </AuthGuard>
-                  } 
-                />
-                <Route 
-                  path="/messages" 
-                  element={
-                    <AuthGuard>
-                      <Messages />
-                    </AuthGuard>
-                  } 
-                />
-                <Route 
-                  path="/notifications" 
-                  element={
-                    <AuthGuard>
-                      <Notifications />
-                    </AuthGuard>
-                  } 
-                />
-                <Route 
-                  path="/profile" 
-                  element={
-                    <AuthGuard>
-                      <Profile />
-                    </AuthGuard>
-                  } 
-                />
-                <Route 
-                  path="/settings" 
-                  element={
-                    <AuthGuard>
-                      <Settings />
-                    </AuthGuard>
-                  } 
-                />
-                
-                {/* 404 Route */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </RealtimeNotificationProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              {/* Public Routes */}
+              <Route 
+                path="/" 
+                element={session ? <Navigate to="/dashboard" replace /> : <Index />} 
+              />
+              <Route 
+                path="/login" 
+                element={session ? <Navigate to="/dashboard" replace /> : <Login />} 
+              />
+              <Route 
+                path="/register" 
+                element={session ? <Navigate to="/dashboard" replace /> : <Register />} 
+              />
+              
+              {/* Protected Routes */}
+              <Route 
+                path="/dashboard" 
+                element={
+                  <AuthGuard>
+                    <Dashboard />
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/friends" 
+                element={
+                  <AuthGuard>
+                    <Friends />
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/messages" 
+                element={
+                  <AuthGuard>
+                    <Messages />
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/notifications" 
+                element={
+                  <AuthGuard>
+                    <Notifications />
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/profile" 
+                element={
+                  <AuthGuard>
+                    <Profile />
+                  </AuthGuard>
+                } 
+              />
+              <Route 
+                path="/settings" 
+                element={
+                  <AuthGuard>
+                    <Settings />
+                  </AuthGuard>
+                } 
+              />
+              
+              {/* 404 Route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
       </FirebaseNotificationProvider>
     </QueryClientProvider>
   );

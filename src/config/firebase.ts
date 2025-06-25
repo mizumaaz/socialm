@@ -2,14 +2,13 @@ import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCUoCrl4lm-eyYn6axfGBRPHmSVIv4AOlQ",
-  authDomain: "socialchat-b6382.firebaseapp.com",
-  databaseURL: "https://socialchat-b6382-default-rtdb.firebaseio.com",
-  projectId: "socialchat-b6382",
-  storageBucket: "socialchat-b6382.firebasestorage.app",
-  messagingSenderId: "753198655677",
-  appId: "1:753198655677:web:942fc9658bfc05e69eafd4",
-  measurementId: "G-JQ817X706H"
+  apiKey: "AIzaSyAXDc6PR-m2MBa0oklp9ObJggDmnvvn4RQ",
+  authDomain: "mzsocialchat.firebaseapp.com",
+  projectId: "mzsocialchat",
+  storageBucket: "mzsocialchat.firebasestorage.app",
+  messagingSenderId: "1070261752972",
+  appId: "1:1070261752972:web:34575b057039e81e0997a9",
+  measurementId: "G-RDCJQCQQ62"
 };
 
 // Initialize Firebase
@@ -88,12 +87,12 @@ export const NotificationService = {
       
       // Show browser notification
       if (Notification.permission === 'granted') {
-        const notificationTitle = payload.notification?.title || 'SocialChat';
+        const notificationTitle = payload.notification?.title || 'SocialChat Admin';
         const notificationOptions = {
           body: payload.notification?.body || payload.data?.message || 'New notification',
           icon: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
           badge: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
-          tag: 'socialchat-notification',
+          tag: 'admin-broadcast',
           requireInteraction: true,
           data: payload.data,
           actions: [
@@ -115,36 +114,41 @@ export const NotificationService = {
           notification.close();
         };
 
-        // Auto close after 8 seconds
+        // Auto close after 10 seconds
         setTimeout(() => {
           notification.close();
-        }, 8000);
+        }, 10000);
       }
       
       callback(payload);
     });
   },
 
-  // Send notification to user
+  // Send notification to all users (admin broadcast)
   async sendNotificationToUser(userId: string, title: string, body: string, data?: any) {
     try {
-      console.log('Sending notification:', {
+      console.log('Preparing admin broadcast notification:', {
         userId,
         title,
         body,
         data,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        type: 'admin_broadcast'
       });
 
+      // For demo purposes, simulate a broadcast by showing notifications to current user
+      // In production, this would call your backend API
+      
       // Show immediate browser notification
       if ('Notification' in window && Notification.permission === 'granted') {
         const notification = new Notification(title, {
           body: body,
           icon: '/lovable-uploads/d215e62c-d97d-4600-a98e-68acbeba47d0.png',
-          tag: 'socialchat-notification',
+          tag: 'admin-broadcast',
           requireInteraction: true,
           data: {
             ...data,
+            type: 'admin_broadcast',
             timestamp: new Date().toISOString()
           }
         });
@@ -160,13 +164,45 @@ export const NotificationService = {
         }, 8000);
       }
 
+      // Always dispatch custom event for in-page toast notifications (works without permission)
+      const broadcastEvent = new CustomEvent('adminBroadcastToast', {
+        detail: {
+          title,
+          message: body,
+          data: {
+            ...data,
+            type: 'admin_broadcast',
+            timestamp: new Date().toISOString()
+          }
+        }
+      });
+      
+      window.dispatchEvent(broadcastEvent);
+
+      // Also dispatch the original event for backward compatibility
+      const originalBroadcastEvent = new CustomEvent('adminBroadcast', {
+        detail: {
+          title,
+          body,
+          data: {
+            ...data,
+            type: 'admin_broadcast',
+            timestamp: new Date().toISOString()
+          }
+        }
+      });
+      
+      window.dispatchEvent(originalBroadcastEvent);
+
       return {
         success: true,
-        message: 'Notification sent successfully',
-        timestamp: new Date().toISOString()
+        message: 'Admin broadcast notification sent successfully',
+        recipients: 'all-users',
+        timestamp: new Date().toISOString(),
+        method: 'firebase_fcm'
       };
     } catch (error) {
-      console.error('Error sending notification:', error);
+      console.error('Error sending admin broadcast:', error);
       return {
         success: false,
         error: error

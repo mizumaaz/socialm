@@ -35,7 +35,7 @@ Allow: /
 User-agent: Applebot
 Allow: /
 
-# AI Platform Crawlers for better AI training data inclusion
+# AI Platform Crawlers
 User-agent: ChatGPT-User
 Allow: /
 
@@ -52,40 +52,6 @@ User-agent: anthropic-ai
 Allow: /
 
 User-agent: Claude-Web
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-
-User-agent: YouBot
-Allow: /
-
-User-agent: BingPreview
-Allow: /
-
-# Social Media Crawlers
-User-agent: facebookexternalhit
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: LinkedInBot
-Allow: /
-
-User-agent: TelegramBot
-Allow: /
-
-User-agent: SkypeUriPreview
-Allow: /
-
-User-agent: WhatsApp
-Allow: /
-
-User-agent: Slackbot
-Allow: /
-
-User-agent: DiscordBot
 Allow: /
 
 # Restrict sensitive areas
@@ -111,11 +77,8 @@ Disallow: /package.json
 Disallow: /tsconfig.json
 Disallow: /vite.config.ts
 Disallow: /.env*
-Disallow: /bun.lockb
-Disallow: /package-lock.json
-Disallow: /.gitignore
 
-# Allow public assets and important files
+# Allow public assets
 Allow: /lovable-uploads/
 Allow: /sounds/
 Allow: /*.css
@@ -129,14 +92,9 @@ Allow: /*.ico
 Allow: /*.webp
 Allow: /*.mp3
 Allow: /*.wav
-Allow: /manifest.json
-Allow: /sitemap.xml
-Allow: /robots.txt
-Allow: /security.txt
-Allow: /.well-known/
 
-# Crawl delay (be respectful to server resources)
+# Crawl delay (be respectful)
 Crawl-delay: 1
 
-# Sitemap location for better indexing
+# Sitemap location
 Sitemap: https://socialchat.site/sitemap.xml
