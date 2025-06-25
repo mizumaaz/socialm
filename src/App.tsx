@@ -18,6 +18,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Friends from "./pages/Friends";
+import Vortex from "./pages/Vortex";
 import Messages from "./pages/Messages";
 import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
@@ -140,6 +141,14 @@ const App = () => {
                   element={
                     <AuthGuard>
                       <Friends />
+                    </AuthGuard>
+                  } 
+                />
+                <Route 
+                  path="/vortex" 
+                  element={
+                    <AuthGuard>
+                      <Vortex />
                     </AuthGuard>
                   } 
                 />

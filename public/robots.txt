@@ -99,6 +99,7 @@ Disallow: /notifications
 Disallow: /profile
 Disallow: /settings
 Disallow: /friends
+Disallow: /vortex
 Disallow: /_next/
 Disallow: /node_modules/
 Disallow: /.git/
