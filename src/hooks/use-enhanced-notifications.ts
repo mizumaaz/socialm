@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOneSignalNotifications } from '@/hooks/use-onesignal-notifications';
+import { onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 
 interface NotificationData {
   id: string;
@@ -11,6 +13,17 @@ interface NotificationData {
   read: boolean;
   created_at: string;
   user_id: string;
+}
+
+interface FirebaseNotification {
+  id: string;
+  type: string;
+  content: string;
+  reference_id?: string;
+  read: boolean;
+  created_at: any;
+  user_id: string;
+  source: 'firebase';
 }
 
 export function useEnhancedNotifications() {
@@ -115,10 +128,11 @@ export function useEnhancedNotifications() {
     }
   }, [toast]);
 
-  // Fetch notifications from database
+  // Fetch notifications from both Supabase and Firebase
   const fetchNotifications = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // Fetch Supabase notifications
+      const { data: supabaseNotifications, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', userId)
@@ -127,12 +141,14 @@ export function useEnhancedNotifications() {
         .limit(50);
 
       if (error) {
-        console.error('Error fetching notifications:', error);
-        return;
+        console.error('Error fetching Supabase notifications:', error);
       }
 
-      setNotifications(data || []);
-      setUnreadCount(data?.filter(n => !n.read).length || 0);
+      // Combine notifications (Firebase notifications will be handled by real-time listener)
+      const allNotifications = supabaseNotifications || [];
+      
+      setNotifications(allNotifications);
+      setUnreadCount(allNotifications.filter(n => !n.read).length);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
@@ -280,7 +296,7 @@ export function useEnhancedNotifications() {
     }
   }, [currentUser]);
 
-  // Setup real-time subscriptions
+  // Setup real-time subscriptions for both Supabase and Firebase
   useEffect(() => {
     if (!currentUser) return;
 
@@ -291,7 +307,7 @@ export function useEnhancedNotifications() {
       });
       channelsRef.current = [];
 
-      // Notifications subscription
+      // Supabase notifications subscription
       const notificationsChannel = supabase
         .channel(`notifications-${currentUser.id}`)
         .on('postgres_changes', {
@@ -337,194 +353,73 @@ export function useEnhancedNotifications() {
         })
         .subscribe();
 
-      // Messages subscription for instant notifications
-      const messagesChannel = supabase
-        .channel(`messages-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const message = payload.new;
-          
-          // Get sender info
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name, username')
-            .eq('id', message.sender_id)
-            .single();
+      // Firebase notifications subscription
+      const firebaseNotificationsQuery = query(
+        collection(db, 'notifications'),
+        where('user_id', '==', currentUser.id),
+        orderBy('created_at', 'desc')
+      );
 
-          if (sender) {
-            // Create notification
-            await createNotification(
-              currentUser.id,
-              'message',
-              `${sender.name} sent you a message`,
-              message.id
-            );
+      const unsubscribeFirebase = onSnapshot(firebaseNotificationsQuery, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const firebaseNotification = {
+              id: change.doc.id,
+              ...change.doc.data(),
+              created_at: change.doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+              source: 'firebase'
+            } as NotificationData;
+
+            // Add to state if not already present
+            setNotifications(prev => {
+              const exists = prev.some(n => n.id === firebaseNotification.id);
+              if (!exists) {
+                setUnreadCount(prevCount => prevCount + 1);
+                
+                // Show notification
+                if (!oneSignalUser.subscribed) {
+                  sendBrowserNotification(getNotificationTitle(firebaseNotification.type), {
+                    body: firebaseNotification.content,
+                    tag: firebaseNotification.type
+                  });
+                }
+
+                toast({
+                  title: getNotificationTitle(firebaseNotification.type),
+                  description: firebaseNotification.content,
+                  duration: 4000
+                });
+
+                return [firebaseNotification, ...prev];
+              }
+              return prev;
+            });
           }
-        })
-        .subscribe();
-
-      // Friend requests subscription
-      const friendsChannel = supabase
-        .channel(`friends-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friends',
-          filter: `receiver_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const friendship = payload.new;
-          
-          // Get sender info
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name, username')
-            .eq('id', friendship.sender_id)
-            .single();
-
-          if (sender) {
-            // Create notification
-            await createNotification(
-              currentUser.id,
-              'friend_request',
-              `${sender.name} sent you a friend request`,
-              friendship.id
-            );
-          }
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'friends',
-          filter: `sender_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const friendship = payload.new;
-          
-          if (friendship.status === 'accepted') {
-            // Get receiver info
-            const { data: receiver } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', friendship.receiver_id)
-              .single();
-
-            if (receiver) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'friend_accepted',
-                `${receiver.name} accepted your friend request`,
-                friendship.id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Likes subscription
-      const likesChannel = supabase
-        .channel(`likes-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'likes'
-        }, async (payload) => {
-          const like = payload.new;
-          
-          // Check if this is a like on current user's post
-          const { data: post } = await supabase
-            .from('posts')
-            .select('user_id, content')
-            .eq('id', like.post_id)
-            .single();
-
-          if (post && post.user_id === currentUser.id && like.user_id !== currentUser.id) {
-            // Get liker info
-            const { data: liker } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', like.user_id)
-              .single();
-
-            if (liker) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'like',
-                `${liker.name} liked your post`,
-                like.post_id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Comments subscription
-      const commentsChannel = supabase
-        .channel(`comments-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'comments'
-        }, async (payload) => {
-          const comment = payload.new;
-          
-          // Check if this is a comment on current user's post
-          const { data: post } = await supabase
-            .from('posts')
-            .select('user_id, content')
-            .eq('id', comment.post_id)
-            .single();
-
-          if (post && post.user_id === currentUser.id && comment.user_id !== currentUser.id) {
-            // Get commenter info
-            const { data: commenter } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', comment.user_id)
-              .single();
-
-            if (commenter) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'comment',
-                `${commenter.name} commented on your post`,
-                comment.post_id
-              );
-            }
-          }
-        })
-        .subscribe();
+        });
+      });
 
       // Store channels for cleanup
-      channelsRef.current = [
-        notificationsChannel,
-        messagesChannel,
-        friendsChannel,
-        likesChannel,
-        commentsChannel
-      ];
+      channelsRef.current = [notificationsChannel];
+      
+      // Store Firebase unsubscribe function
+      return () => {
+        unsubscribeFirebase();
+      };
     };
 
-    setupRealtimeSubscriptions();
+    const cleanup = setupRealtimeSubscriptions();
 
     // Reconnect on network recovery
     if (isOnline) {
       const reconnectTimer = setTimeout(setupRealtimeSubscriptions, 1000);
-      return () => clearTimeout(reconnectTimer);
+      return () => {
+        cleanup?.();
+        clearTimeout(reconnectTimer);
+      };
     }
 
-    return () => {
-      channelsRef.current.forEach(channel => {
-        supabase.removeChannel(channel);
-      });
-      channelsRef.current = [];
-    };
-  }, [currentUser, isOnline, createNotification, sendBrowserNotification, toast, oneSignalUser.subscribed]);
+    return cleanup;
+  }, [currentUser, isOnline, sendBrowserNotification, toast, oneSignalUser.subscribed]);
 
   // Request notification permission (browser fallback)
   const requestPermission = useCallback(async () => {
@@ -584,6 +479,8 @@ function getNotificationTitle(type: string): string {
       return 'New Comment';
     case 'system':
       return '🎨 Customize Your Experience';
+    case 'post':
+      return 'New Post';
     default:
       return 'Notification';
   }
