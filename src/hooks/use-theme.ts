@@ -24,12 +24,25 @@ const customStorage = {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase
+        // Check if the columns exist first
+        const { data: columnsExist, error: columnsError } = await supabase.rpc('check_theme_columns_exist');
+        
+        if (columnsError || !columnsExist) {
+          console.log('Theme columns do not exist yet, using defaults');
+          return JSON.stringify({ state: { theme: 'light', colorTheme: 'green' } });
+        }
+        
+        const { data, error } = await supabase
           .from('profiles')
           .select('theme_preference, color_theme')
           .eq('id', user.id)
           .single();
         
+        if (error) {
+          console.error('Error fetching theme from database:', error);
+          return JSON.stringify({ state: { theme: 'light', colorTheme: 'green' } });
+        }
+
         if (data?.theme_preference) {
           // Save to localStorage for faster access next time
           localStorage.setItem(name, JSON.stringify({ 
@@ -63,6 +76,15 @@ const customStorage = {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { theme, colorTheme } = JSON.parse(value).state;
+        
+        // Check if the columns exist first
+        const { data: columnsExist, error: columnsError } = await supabase.rpc('check_theme_columns_exist');
+        
+        if (columnsError || !columnsExist) {
+          console.log('Theme columns do not exist yet, skipping database update');
+          return;
+        }
+        
         await supabase
           .from('profiles')
           .update({ 
@@ -127,10 +149,16 @@ export const useTheme = create<ThemeStore>()(
                   </div>
                 ` : ''}
                 <div class="flex justify-end gap-3">
-                  <button class="px-4 py-2 text-sm font-pixelated bg-muted hover:bg-muted/80 rounded-md transition-colors" onclick="this.closest('.fixed').remove(); window.resolveTheme(false);">
+                  <button
+                    onClick="this.closest('.fixed').remove(); window.resolveTheme(false);"
+                    class="bg-muted text-foreground px-3 py-1 rounded text-sm hover:bg-muted/80 transition-colors font-pixelated"
+                  >
                     Cancel
                   </button>
-                  <button class="px-4 py-2 text-sm font-pixelated ${isModernTheme ? 'bg-blue-600 hover:bg-blue-700' : 'bg-primary hover:bg-primary/90'} text-white rounded-md transition-colors" onclick="this.closest('.fixed').remove(); window.resolveTheme(true);">
+                  <button
+                    onClick="this.closest('.fixed').remove(); window.resolveTheme(true);"
+                    class="${isModernTheme ? 'bg-blue-600 hover:bg-blue-700' : 'bg-primary hover:bg-primary/90'} text-white px-3 py-1 rounded text-sm transition-colors font-pixelated"
+                  >
                     ${isModernTheme ? 'Switch to Modern' : 'Confirm'}
                   </button>
                 </div>

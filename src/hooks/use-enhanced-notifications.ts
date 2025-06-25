@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOneSignalNotifications } from '@/hooks/use-onesignal-notifications';
@@ -20,7 +20,6 @@ export function useEnhancedNotifications() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [hasShownSystemNotification, setHasShownSystemNotification] = useState(false);
-  const channelsRef = useRef<any[]>([]);
   const { toast } = useToast();
   const { oneSignalUser, sendNotificationToUser } = useOneSignalNotifications();
 
@@ -83,6 +82,17 @@ export function useEnhancedNotifications() {
   // Create system notification about theme customization
   const createSystemNotification = useCallback(async (userId: string) => {
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, skipping system notification');
+        return;
+      }
+      
       const systemNotification = {
         user_id: userId,
         type: 'system',
@@ -96,7 +106,10 @@ export function useEnhancedNotifications() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating system notification:', error);
+        return;
+      }
 
       // Add to local state
       setNotifications(prev => [data, ...prev]);
@@ -118,6 +131,19 @@ export function useEnhancedNotifications() {
   // Fetch notifications from database
   const fetchNotifications = useCallback(async (userId: string) => {
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, using empty array');
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -128,6 +154,8 @@ export function useEnhancedNotifications() {
 
       if (error) {
         console.error('Error fetching notifications:', error);
+        setNotifications([]);
+        setUnreadCount(0);
         return;
       }
 
@@ -135,6 +163,8 @@ export function useEnhancedNotifications() {
       setUnreadCount(data?.filter(n => !n.read).length || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      setNotifications([]);
+      setUnreadCount(0);
     }
   }, []);
 
@@ -146,6 +176,17 @@ export function useEnhancedNotifications() {
     referenceId?: string
   ) => {
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, skipping notification creation');
+        return null;
+      }
+      
       const { data, error } = await supabase
         .from('notifications')
         .insert({
@@ -208,6 +249,17 @@ export function useEnhancedNotifications() {
   // Mark notification as read
   const markAsRead = useCallback(async (notificationId: string) => {
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, skipping mark as read');
+        return;
+      }
+      
       const { error } = await supabase
         .from('notifications')
         .update({ read: true })
@@ -229,6 +281,17 @@ export function useEnhancedNotifications() {
     if (!currentUser) return;
 
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, skipping mark all as read');
+        return;
+      }
+      
       const { error } = await supabase
         .from('notifications')
         .update({ read: true })
@@ -247,6 +310,17 @@ export function useEnhancedNotifications() {
   // Delete notification
   const deleteNotification = useCallback(async (notificationId: string) => {
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, skipping delete notification');
+        return;
+      }
+      
       const { error } = await supabase
         .from('notifications')
         .update({ deleted_at: new Date().toISOString() })
@@ -255,16 +329,33 @@ export function useEnhancedNotifications() {
       if (error) throw error;
 
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      
+      // Update unread count if needed
+      const wasUnread = notifications.find(n => n.id === notificationId)?.read === false;
+      if (wasUnread) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
-  }, []);
+  }, [notifications]);
 
   // Clear all notifications
   const clearAllNotifications = useCallback(async () => {
     if (!currentUser) return;
 
     try {
+      // Check if notifications table exists
+      const { error: tableCheckError } = await supabase
+        .from('notifications')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.log('Notifications table does not exist yet, skipping clear all notifications');
+        return;
+      }
+      
       const { error } = await supabase
         .from('notifications')
         .update({ deleted_at: new Date().toISOString() })
@@ -279,252 +370,6 @@ export function useEnhancedNotifications() {
       console.error('Error clearing notifications:', error);
     }
   }, [currentUser]);
-
-  // Setup real-time subscriptions
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const setupRealtimeSubscriptions = () => {
-      // Cleanup existing channels
-      channelsRef.current.forEach(channel => {
-        supabase.removeChannel(channel);
-      });
-      channelsRef.current = [];
-
-      // Notifications subscription
-      const notificationsChannel = supabase
-        .channel(`notifications-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const newNotification = payload.new as NotificationData;
-          
-          // Add to state
-          setNotifications(prev => [newNotification, ...prev]);
-          setUnreadCount(prev => prev + 1);
-
-          // Show browser notification only if OneSignal is not handling it
-          if (!oneSignalUser.subscribed) {
-            sendBrowserNotification(getNotificationTitle(newNotification.type), {
-              body: newNotification.content,
-              tag: newNotification.type,
-              data: { id: newNotification.id, type: newNotification.type }
-            });
-          }
-
-          // Show toast with special styling for system notifications
-          const isSystemNotification = newNotification.type === 'system';
-          toast({
-            title: getNotificationTitle(newNotification.type),
-            description: newNotification.content,
-            duration: isSystemNotification ? 8000 : 4000,
-            className: isSystemNotification ? 'border-l-4 border-l-blue-500 bg-blue-50 text-blue-900 shadow-lg' : undefined
-          });
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${currentUser.id}`
-        }, (payload) => {
-          const updatedNotification = payload.new as NotificationData;
-          setNotifications(prev =>
-            prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
-          );
-        })
-        .subscribe();
-
-      // Messages subscription for instant notifications
-      const messagesChannel = supabase
-        .channel(`messages-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const message = payload.new;
-          
-          // Get sender info
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name, username')
-            .eq('id', message.sender_id)
-            .single();
-
-          if (sender) {
-            // Create notification
-            await createNotification(
-              currentUser.id,
-              'message',
-              `${sender.name} sent you a message`,
-              message.id
-            );
-          }
-        })
-        .subscribe();
-
-      // Friend requests subscription
-      const friendsChannel = supabase
-        .channel(`friends-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friends',
-          filter: `receiver_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const friendship = payload.new;
-          
-          // Get sender info
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name, username')
-            .eq('id', friendship.sender_id)
-            .single();
-
-          if (sender) {
-            // Create notification
-            await createNotification(
-              currentUser.id,
-              'friend_request',
-              `${sender.name} sent you a friend request`,
-              friendship.id
-            );
-          }
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'friends',
-          filter: `sender_id=eq.${currentUser.id}`
-        }, async (payload) => {
-          const friendship = payload.new;
-          
-          if (friendship.status === 'accepted') {
-            // Get receiver info
-            const { data: receiver } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', friendship.receiver_id)
-              .single();
-
-            if (receiver) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'friend_accepted',
-                `${receiver.name} accepted your friend request`,
-                friendship.id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Likes subscription
-      const likesChannel = supabase
-        .channel(`likes-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'likes'
-        }, async (payload) => {
-          const like = payload.new;
-          
-          // Check if this is a like on current user's post
-          const { data: post } = await supabase
-            .from('posts')
-            .select('user_id, content')
-            .eq('id', like.post_id)
-            .single();
-
-          if (post && post.user_id === currentUser.id && like.user_id !== currentUser.id) {
-            // Get liker info
-            const { data: liker } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', like.user_id)
-              .single();
-
-            if (liker) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'like',
-                `${liker.name} liked your post`,
-                like.post_id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Comments subscription
-      const commentsChannel = supabase
-        .channel(`comments-${currentUser.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'comments'
-        }, async (payload) => {
-          const comment = payload.new;
-          
-          // Check if this is a comment on current user's post
-          const { data: post } = await supabase
-            .from('posts')
-            .select('user_id, content')
-            .eq('id', comment.post_id)
-            .single();
-
-          if (post && post.user_id === currentUser.id && comment.user_id !== currentUser.id) {
-            // Get commenter info
-            const { data: commenter } = await supabase
-              .from('profiles')
-              .select('name, username')
-              .eq('id', comment.user_id)
-              .single();
-
-            if (commenter) {
-              // Create notification
-              await createNotification(
-                currentUser.id,
-                'comment',
-                `${commenter.name} commented on your post`,
-                comment.post_id
-              );
-            }
-          }
-        })
-        .subscribe();
-
-      // Store channels for cleanup
-      channelsRef.current = [
-        notificationsChannel,
-        messagesChannel,
-        friendsChannel,
-        likesChannel,
-        commentsChannel
-      ];
-    };
-
-    setupRealtimeSubscriptions();
-
-    // Reconnect on network recovery
-    if (isOnline) {
-      const reconnectTimer = setTimeout(setupRealtimeSubscriptions, 1000);
-      return () => clearTimeout(reconnectTimer);
-    }
-
-    return () => {
-      channelsRef.current.forEach(channel => {
-        supabase.removeChannel(channel);
-      });
-      channelsRef.current = [];
-    };
-  }, [currentUser, isOnline, createNotification, sendBrowserNotification, toast, oneSignalUser.subscribed]);
 
   // Request notification permission (browser fallback)
   const requestPermission = useCallback(async () => {

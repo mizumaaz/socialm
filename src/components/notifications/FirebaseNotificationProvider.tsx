@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { useFirebaseNotifications } from '@/hooks/use-firebase-notifications';
 import { useToast } from '@/hooks/use-toast';
+import { useEnhancedNotifications } from '@/hooks/use-enhanced-notifications';
 
 interface FirebaseNotificationContextType {
   isSupported: boolean;
@@ -27,6 +28,7 @@ interface FirebaseNotificationProviderProps {
 export function FirebaseNotificationProvider({ children }: FirebaseNotificationProviderProps) {
   const firebaseNotifications = useFirebaseNotifications();
   const { toast } = useToast();
+  const { unreadCount } = useEnhancedNotifications();
 
   // Show notification permission prompt on first visit
   useEffect(() => {
@@ -54,6 +56,19 @@ export function FirebaseNotificationProvider({ children }: FirebaseNotificationP
       return () => clearTimeout(timer);
     }
   }, [firebaseNotifications.isInitialized, firebaseNotifications.isSupported, firebaseNotifications.permission, firebaseNotifications.requestPermission, toast]);
+
+  // Update document title with unread count
+  useEffect(() => {
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) SocialChat`;
+    } else {
+      document.title = "SocialChat";
+    }
+    
+    return () => {
+      document.title = "SocialChat";
+    };
+  }, [unreadCount]);
 
   return (
     <FirebaseNotificationContext.Provider value={firebaseNotifications}>
